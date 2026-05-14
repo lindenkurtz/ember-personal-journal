@@ -100,7 +100,9 @@ export default function Morning() {
           "in their recent daily journal. Be warm but honest, specific, and concrete — " +
           "no preamble, no greeting, no sign-off. Speak to the user directly. " +
           "If you notice a pattern (e.g. low sleep correlated with skipped gym, or " +
-          "deep work consistently undershooting target), name it gently.",
+          "deep work consistently undershooting target), name it gently. " +
+          "Only reference facts present in the data you're given; never fabricate " +
+          "numbers, durations, or units.",
         prompt: buildNudgePrompt(recent, { date, ...draft })
       })
       setNudge(text.trim())
@@ -272,6 +274,8 @@ function buildNudgePrompt(
   today: { date: string } & DraftMorning
 ): string {
   // Compact JSON keeps the token cost small while preserving all signal.
+  // The schema header is critical: without it Claude has hallucinated
+  // "hours of sleep" from the 1–5 `sleep` quality rating.
   const history = recent.map((e) => ({
     d: e.date,
     bed: e.bedtime,
@@ -283,10 +287,20 @@ function buildNudgePrompt(
     soc: e.social
   }))
   return [
+    "Schema (all fields nullable; null means the user didn't log it):",
+    "- d: date (YYYY-MM-DD)",
+    "- bed: bedtime as 'HH:MM' local time the user went to sleep the night before. NOT a duration.",
+    "- sleep: self-reported sleep quality, integer 1–5 stars. NOT hours of sleep — sleep duration is not tracked.",
+    "- gym_i: morning intention for the gym — 'yes' | 'no' | 'rest'",
+    "- gym_a: evening report of whether they actually went — 'yes' | 'no' | 'rest'",
+    "- dw_t: deep-work target in hours (decimal, e.g. 2.5)",
+    "- dw_a: deep-work actually completed in hours",
+    "- soc: boolean — did they have meaningful social interaction that day",
+    "",
     "Recent 14 days (most recent last):",
     JSON.stringify(history),
     "",
-    "This morning:",
+    "This morning's check-in (same field meanings as above, full names):",
     JSON.stringify({
       date: today.date,
       bedtime: today.bedtime,
@@ -296,6 +310,6 @@ function buildNudgePrompt(
       deep_work_start: today.deep_work_start
     }),
     "",
-    "Write the nudge."
+    "Write the nudge. Do not invent fields or units that are not in the schema. Never reference hours of sleep — that data does not exist."
   ].join('\n')
 }

@@ -45,13 +45,11 @@ textarea {
   border-radius: 4px;
 }
 
-/* iOS safe-area awareness */
+/* Route shell — sizing and safe-area handling live on each page so the math
+ * isn't double-counted. This rule stays as a stable hook for future global
+ * concerns (e.g. a top notification bar) but otherwise does nothing. */
 .app-shell {
-  min-height: 100dvh;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  display: contents;
 }
 
 /* Small util: muted helper text */

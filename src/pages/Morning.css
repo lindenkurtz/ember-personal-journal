@@ -1,9 +1,17 @@
 .morning {
-  min-height: 100dvh;
+  /* svh, not dvh — svh is the smallest stable viewport height on iOS Safari,
+   * so the page never reflows when the URL bar shows/hides. The footer stays
+   * visible at all times. */
+  min-height: 100svh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  padding: 24px 20px 32px;
-  gap: 24px;
+  /* Safe-area baked in so the page is its own viewport-anchored layout. */
+  padding:
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  gap: clamp(12px, 3vh, 24px);
   max-width: 640px;
   margin: 0 auto;
 }
@@ -24,8 +32,13 @@
 
 .morning__stage {
   display: grid;
-  place-items: center;
+  /* Anchor the question near the top instead of geometric center, so the
+   * footer is guaranteed to sit at the bottom of the viewport rather than
+   * being pushed off by a tall question (e.g. focus step with two inputs). */
+  align-items: start;
+  justify-items: center;
   width: 100%;
+  padding-top: clamp(16px, 6vh, 56px);
 }
 
 .morning__footer {

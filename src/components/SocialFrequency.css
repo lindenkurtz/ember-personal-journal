@@ -1,0 +1,45 @@
+.social {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.social__row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.social__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.social__day {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.social__dot {
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 28px;
+  border-radius: 999px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+}
+
+.social__dot.is-on {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: 0 0 10px var(--amber-glow);
+}
+
+.social__count {
+  color: var(--muted);
+  font-size: 13px;
+}

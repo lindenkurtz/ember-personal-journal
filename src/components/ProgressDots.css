@@ -1,0 +1,25 @@
+.dots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.dots__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.35;
+  transition: all 0.3s var(--ease);
+}
+
+.dots__dot.is-done {
+  background: var(--amber);
+  opacity: 0.55;
+}
+
+.dots__dot.is-current {
+  background: var(--amber);
+  opacity: 1;
+  width: 18px;
+}

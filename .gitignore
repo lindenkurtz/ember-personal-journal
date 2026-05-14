@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+.DS_Store
+.env
+.env.local
+.dev.vars
+.wrangler
+*.log
+.vscode/*
+!.vscode/extensions.json

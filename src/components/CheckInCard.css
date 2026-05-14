@@ -1,0 +1,103 @@
+.checkincard {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 14px 20px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-align: left;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.checkincard:hover {
+  background: var(--card-soft);
+}
+
+.checkincard:active {
+  transform: scale(0.99);
+}
+
+.checkincard__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.checkincard__title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.checkincard__summary {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkincard__status {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.checkincard__arrow {
+  color: var(--amber);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.checkincard__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--amber);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--amber-soft);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.checkincard__pill {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #2A1B0E;
+  background: linear-gradient(180deg, var(--amber) 0%, var(--terracotta) 100%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 0 14px var(--amber-glow);
+}
+
+/* --- variants --- */
+.checkincard--cta {
+  border-color: var(--terracotta-soft);
+}
+.checkincard--cta:hover {
+  border-color: var(--terracotta);
+}
+
+.checkincard--warn {
+  border-color: var(--terracotta);
+  background: linear-gradient(180deg, rgba(212, 132, 90, 0.10) 0%, var(--card) 100%);
+}
+
+/* --- status mods --- */
+.checkincard--done {
+  border-color: var(--hairline);
+}
+.checkincard--done .checkincard__title {
+  color: var(--text);
+}

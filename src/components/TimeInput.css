@@ -1,0 +1,21 @@
+.timeinput {
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-align: center;
+  width: 100%;
+  max-width: 240px;
+  color: var(--text);
+  color-scheme: dark; /* Native time picker UI uses dark palette */
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.timeinput:focus {
+  outline: none;
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 1px var(--terracotta) inset;
+}

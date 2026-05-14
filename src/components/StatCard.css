@@ -1,0 +1,45 @@
+.statcard {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.statcard.is-glow::before {
+  content: '';
+  position: absolute;
+  inset: -40% -30% auto auto;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, var(--amber-glow) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.statcard__label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  position: relative;
+}
+
+.statcard__value {
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.05;
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+.statcard__sub {
+  color: var(--muted);
+  font-size: 13px;
+  position: relative;
+}

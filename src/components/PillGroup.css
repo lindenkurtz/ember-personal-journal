@@ -1,0 +1,42 @@
+.pills {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .pills {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.pills__pill {
+  flex: 1;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  background: var(--card-soft);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+  border: 1px solid var(--hairline);
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  min-height: 56px;
+}
+
+.pills__pill:hover {
+  border-color: var(--terracotta-soft);
+}
+
+.pills__pill:active {
+  transform: scale(0.98);
+}
+
+.pills__pill.is-selected {
+  background: var(--amber-soft);
+  color: var(--text);
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 1px var(--terracotta) inset, 0 6px 18px rgba(212, 132, 90, 0.18);
+}

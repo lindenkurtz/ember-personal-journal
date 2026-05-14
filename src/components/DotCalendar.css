@@ -1,0 +1,20 @@
+.dotcal {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.dotcal__dot {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  transition: background 0.2s var(--ease);
+}
+
+.dotcal__dot.is-on {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: 0 0 8px var(--amber-glow);
+}

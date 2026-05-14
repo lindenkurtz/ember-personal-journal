@@ -1,0 +1,25 @@
+.stars {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.stars__btn {
+  padding: 6px;
+  border-radius: 12px;
+  transition: transform 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stars__btn:hover,
+.stars__btn:focus-visible {
+  transform: translateY(-1px);
+}
+
+.stars__btn.is-filled {
+  filter: drop-shadow(0 0 8px var(--amber-glow));
+}
+
+.stars__btn:active {
+  transform: scale(0.94);
+}

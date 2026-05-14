@@ -1,7 +1,11 @@
 .patterns {
   max-width: 680px;
   margin: 0 auto;
-  padding: 28px 20px 56px;
+  padding:
+    max(44px, calc(env(safe-area-inset-top) + 16px))
+    max(20px, env(safe-area-inset-right))
+    max(56px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 24px;

@@ -1,7 +1,15 @@
 .dash {
   max-width: 720px;
   margin: 0 auto;
-  padding: 28px 20px 56px;
+  /* Safe-area-aware so the notch doesn't clip the date header and the home
+   * indicator doesn't sit on top of the bottom cards. The +16px on top is a
+   * breathing buffer — env(safe-area-inset-top) only reports the obstructed
+   * area, so content placed flush against it still reads as clipped. */
+  padding:
+    max(44px, calc(env(safe-area-inset-top) + 16px))
+    max(20px, env(safe-area-inset-right))
+    max(56px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 20px;

@@ -1,15 +1,18 @@
 .morning {
-  /* svh, not dvh — svh is the smallest stable viewport height on iOS Safari,
-   * so the page never reflows when the URL bar shows/hides. The footer stays
-   * visible at all times. */
-  min-height: 100svh;
+  /* Fixed height so the auto/1fr/auto grid pins the footer to the visible
+   * bottom of the viewport. dvh is identical to svh/lvh in PWA standalone
+   * (no URL-bar reflow), and none of the check-in steps exceed the viewport. */
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  /* Safe-area baked in so the page is its own viewport-anchored layout. */
+  /* Safe-area baked in so the page is its own viewport-anchored layout.
+   * Top adds a +12px buffer beyond the obstructed inset so the progress dots
+   * don't kiss the status bar; bottom uses a small 12px floor so the footer
+   * sits close to the home indicator on non-notched devices. */
   padding:
-    max(20px, env(safe-area-inset-top))
+    max(32px, calc(env(safe-area-inset-top) + 12px))
     max(20px, env(safe-area-inset-right))
-    max(24px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-bottom))
     max(20px, env(safe-area-inset-left));
   gap: clamp(12px, 3vh, 24px);
   max-width: 640px;

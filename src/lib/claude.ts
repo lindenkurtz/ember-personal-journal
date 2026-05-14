@@ -19,8 +19,9 @@ export async function callClaude(req: ClaudeRequest): Promise<string> {
     body: JSON.stringify({ ...req, stream: false })
   })
   if (!r.ok) throw new Error(`claude proxy ${r.status}: ${await r.text()}`)
-  const body = (await r.json()) as { text: string }
-  return body.text
+  const body = (await r.json()) as { text?: string; error?: string; detail?: string }
+  if (body.error) throw new Error(`${body.error}: ${body.detail ?? ''}`)
+  return body.text ?? ''
 }
 
 /**

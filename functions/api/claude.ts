@@ -17,61 +17,73 @@ interface ChatBody {
   max_tokens?: number
 }
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-sonnet-4-6'
 
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
-  let body: ChatBody
   try {
-    body = await ctx.request.json<ChatBody>()
-  } catch {
-    return new Response('Invalid JSON', { status: 400 })
-  }
-  if (!body?.prompt) return new Response('Missing prompt', { status: 400 })
-  if (!ctx.env.ANTHROPIC_API_KEY) {
-    return new Response('ANTHROPIC_API_KEY not configured', { status: 500 })
-  }
+    let body: ChatBody
+    try {
+      body = await ctx.request.json<ChatBody>()
+    } catch {
+      return new Response('Invalid JSON', { status: 400 })
+    }
+    if (!body?.prompt) return new Response('Missing prompt', { status: 400 })
+    if (!ctx.env.ANTHROPIC_API_KEY) {
+      return new Response('ANTHROPIC_API_KEY not configured', { status: 500 })
+    }
 
-  const stream = !!body.stream
-  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': ctx.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: body.max_tokens ?? 256,
-      system: body.system,
-      stream,
-      messages: [{ role: 'user', content: body.prompt }]
-    })
-  })
-
-  if (!upstream.ok) {
-    const text = await upstream.text()
-    return new Response(`Anthropic ${upstream.status}: ${text}`, { status: 502 })
-  }
-
-  if (stream) {
-    // Pipe SSE bytes straight through. No buffering, no transformation —
-    // the client parses `content_block_delta` events itself.
-    return new Response(upstream.body, {
+    const stream = !!body.stream
+    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
       headers: {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache, no-transform',
-        'x-accel-buffering': 'no'
-      }
+        'content-type': 'application/json',
+        'x-api-key': ctx.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: body.max_tokens ?? 256,
+        system: body.system,
+        stream,
+        messages: [{ role: 'user', content: body.prompt }]
+      })
     })
-  }
 
-  const json = (await upstream.json()) as {
-    content?: Array<{ type: string; text?: string }>
+    if (!upstream.ok) {
+      // Return 200 with a JSON error envelope — Cloudflare's edge replaces 5xx
+      // bodies from proxied zones with its branded error page, hiding the real
+      // upstream error from the client.
+      const text = await upstream.text()
+      console.error('anthropic upstream', upstream.status, text)
+      return Response.json(
+        { error: `anthropic ${upstream.status}`, detail: text },
+        { status: 200 }
+      )
+    }
+
+    if (stream) {
+      // Pipe SSE bytes straight through. No buffering, no transformation —
+      // the client parses `content_block_delta` events itself.
+      return new Response(upstream.body, {
+        headers: {
+          'content-type': 'text/event-stream; charset=utf-8',
+          'cache-control': 'no-cache, no-transform',
+          'x-accel-buffering': 'no'
+        }
+      })
+    }
+
+    const json = (await upstream.json()) as {
+      content?: Array<{ type: string; text?: string }>
+    }
+    const text =
+      json.content
+        ?.filter((c) => c.type === 'text')
+        .map((c) => c.text ?? '')
+        .join('') ?? ''
+    return Response.json({ text })
+  } catch (e) {
+    console.error('claude proxy crash', e)
+    return Response.json({ error: 'proxy_crash', detail: String(e) }, { status: 200 })
   }
-  const text =
-    json.content
-      ?.filter((c) => c.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('') ?? ''
-  return Response.json({ text })
 }

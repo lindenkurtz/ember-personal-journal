@@ -18,6 +18,8 @@ interface Settings {
   timezone: string
   last_morning_sent: string | null
   last_evening_sent: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 interface Entry {
@@ -53,7 +55,7 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
 
   const { data: settingsRow, error: settingsErr } = await supabase
     .from('push_settings')
-    .select('enabled, morning_time, evening_time, timezone, last_morning_sent, last_evening_sent')
+    .select('enabled, morning_time, evening_time, timezone, last_morning_sent, last_evening_sent, latitude, longitude')
     .eq('id', 1)
     .maybeSingle()
   if (settingsErr) throw settingsErr
@@ -65,10 +67,10 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
   const todayEntry = await getEntry(supabase, dateKey)
 
   if (force === 'morning' || dueMorning(settings, hhmm, dateKey, todayEntry)) {
-    await fire(supabase, env, 'morning', dateKey)
+    await fire(supabase, env, 'morning', dateKey, settings)
   }
   if (force === 'evening' || dueEvening(settings, hhmm, dateKey, todayEntry)) {
-    await fire(supabase, env, 'evening', dateKey)
+    await fire(supabase, env, 'evening', dateKey, settings)
   }
 }
 
@@ -95,7 +97,7 @@ async function getEntry(supabase: SupabaseClient, date: string): Promise<Entry |
   return (data as Entry | null) ?? null
 }
 
-async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: string): Promise<void> {
+async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: string, settings: Settings): Promise<void> {
   const { data: subs, error } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
@@ -131,9 +133,47 @@ async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: str
     }
   }
 
+  // Passive weather capture: piggyback on the morning send so we attach
+  // a snapshot to today's row before the user even opens the check-in.
+  // Failures here must never prevent the push from being marked sent.
+  if (slot === 'morning' && settings.latitude != null && settings.longitude != null) {
+    await fetchAndStoreWeather(supabase, settings.latitude, settings.longitude, dateKey)
+  }
+
   // Mark this slot sent for today so subsequent ticks don't re-fire.
   const column = slot === 'morning' ? 'last_morning_sent' : 'last_evening_sent'
   await supabase.from('push_settings').update({ [column]: dateKey }).eq('id', 1)
+}
+
+async function fetchAndStoreWeather(
+  supabase: SupabaseClient,
+  lat: number,
+  lon: number,
+  dateKey: string
+): Promise<void> {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode&temperature_unit=fahrenheit`
+    const res = await fetch(url)
+    if (!res.ok) {
+      console.error('[notifier] open-meteo', res.status)
+      return
+    }
+    const json = (await res.json()) as {
+      current?: { temperature_2m?: number; weathercode?: number }
+    }
+    const t = json.current?.temperature_2m
+    const c = json.current?.weathercode
+    if (t == null && c == null) return
+    const { error } = await supabase
+      .from('entries')
+      .upsert(
+        { date: dateKey, weather_temp_f: t ?? null, weather_code: c ?? null },
+        { onConflict: 'date' }
+      )
+    if (error) console.error('[notifier] weather upsert', error)
+  } catch (err) {
+    console.error('[notifier] weather fetch failed', err)
+  }
 }
 
 function payloadFor(slot: Slot): { title: string; body: string; tag: Slot; url: string } {

@@ -1,0 +1,20 @@
+{
+  "name": "ember-notifier",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail",
+    "tick": "wrangler dev --test-scheduled"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260514.1",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.78.0"
+  }
+}

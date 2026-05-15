@@ -1,0 +1,17 @@
+name = "ember-notifier"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Cron every 5 minutes. The Worker checks current local time inside the
+# handler against `push_settings.{morning,evening}_time` and only sends if
+# the relevant slot is due *and* the matching check-in fields for today are
+# still empty.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Secrets (set via `wrangler secret put`):
+#   VAPID_PUBLIC_KEY    — base64url, also bundled into the SPA as VITE_VAPID_PUBLIC_KEY
+#   VAPID_PRIVATE_KEY   — base64url
+#   VAPID_SUBJECT       — e.g. mailto:you@example.com
+#   SUPABASE_URL
+#   SUPABASE_KEY        — anon is fine for a single-user, RLS-less project

@@ -116,7 +116,8 @@
   text-transform: uppercase;
 }
 
-.settings__field input[type='time'] {
+.settings__field input[type='time'],
+.settings__field input[type='number'] {
   appearance: none;
   background: transparent;
   border: none;
@@ -128,7 +129,8 @@
   outline: none;
 }
 
-.settings__field input[type='time']:disabled {
+.settings__field input[type='time']:disabled,
+.settings__field input[type='number']:disabled {
   color: var(--muted);
 }
 

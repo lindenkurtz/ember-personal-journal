@@ -14,8 +14,7 @@ import './Morning.css'
 
 const GYM_OPTIONS = [
   { value: 'yes', label: 'Yes' },
-  { value: 'no', label: 'No' },
-  { value: 'rest', label: 'Rest day' }
+  { value: 'no', label: 'No' }
 ] as const
 
 interface DraftMorning {
@@ -291,8 +290,8 @@ function buildNudgePrompt(
     "- d: date (YYYY-MM-DD)",
     "- bed: bedtime as 'HH:MM' local time the user went to sleep the night before. NOT a duration.",
     "- sleep: self-reported sleep quality, integer 1–5 stars. NOT hours of sleep — sleep duration is not tracked.",
-    "- gym_i: morning intention for the gym — 'yes' | 'no' | 'rest'",
-    "- gym_a: evening report of whether they actually went — 'yes' | 'no' | 'rest'",
+    "- gym_i: morning intention for the gym — 'yes' | 'no'",
+    "- gym_a: evening report of whether they actually went — 'yes' | 'no'",
     "- dw_t: deep-work target in hours (decimal, e.g. 2.5)",
     "- dw_a: deep-work actually completed in hours",
     "- soc: boolean — did they have meaningful social interaction that day",

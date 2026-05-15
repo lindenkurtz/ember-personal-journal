@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, parseISO, format } from 'date-fns'
 import { Entry, getRange, getEntry } from '../lib/entries'
-import { gymStreak, deepWorkStreak } from '../lib/streaks'
+import { gymStreak, restDaysLeft, deepWorkStreak } from '../lib/streaks'
+import { getSettings, PushSettings } from '../lib/settings'
 import { prettyDay, todayKey, dayKey } from '../lib/date'
 import StatCard from '../components/StatCard'
 import CheckInCard from '../components/CheckInCard'
@@ -16,24 +17,28 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [today, setToday] = useState<Entry | null>(null)
   const [yesterday, setYesterday] = useState<Entry | null>(null)
+  const [settings, setSettings] = useState<PushSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     const yKey = dayKey(subDays(new Date(), 1))
-    Promise.all([getRange(30), getEntry(todayKey()), getEntry(yKey)])
-      .then(([range, t, y]) => {
+    Promise.all([getRange(30), getEntry(todayKey()), getEntry(yKey), getSettings()])
+      .then(([range, t, y, s]) => {
         if (cancelled) return
         setEntries(range)
         setToday(t)
         setYesterday(y)
+        setSettings(s)
       })
       .catch((err) => console.error('[dashboard]', err))
       .finally(() => !cancelled && setLoading(false))
     return () => { cancelled = true }
   }, [])
 
-  const gym = gymStreak(entries)
+  const restBudget = settings?.rest_days_per_week ?? 3
+  const gym = gymStreak(entries, restBudget)
+  const restLeft = restDaysLeft(entries, restBudget)
   const dw = deepWorkStreak(entries)
 
   const morningDone = isMorningDone(today)
@@ -95,7 +100,9 @@ export default function Dashboard() {
             <StatCard
               label="Gym streak"
               value={<><span className="dash__num">{gym}</span> <span className="dash__unit">{gym === 1 ? 'day' : 'days'}</span></>}
-              sublabel="rest days count"
+              sublabel={restLeft === 0
+                ? 'budget reached this week'
+                : `${restLeft} rest ${restLeft === 1 ? 'day' : 'days'} left this week`}
               variant="glow"
             />
             <StatCard
@@ -113,7 +120,7 @@ export default function Dashboard() {
             <DotCalendar
               entries={entries}
               label="Gym last 30 days"
-              filled={(e) => e?.gym_actual === 'yes' || e?.gym_actual === 'rest'}
+              filled={(e) => e?.gym_actual === 'yes'}
             />
           </section>
 
@@ -156,19 +163,15 @@ function isEveningDone(e: Entry | null): boolean {
 function morningSummary(e: Entry): string {
   const parts: string[] = []
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
-  if (e.gym_intention) parts.push(`gym ${labelGym(e.gym_intention)}`)
+  if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
   if (e.deep_work_target) parts.push(`${e.deep_work_target}h target`)
   return parts.join(' · ')
 }
 
 function eveningSummary(e: Entry): string {
   const parts: string[] = []
-  if (e.gym_actual) parts.push(`gym ${labelGym(e.gym_actual)}`)
+  if (e.gym_actual) parts.push(`gym ${e.gym_actual}`)
   if (e.deep_work_actual !== null) parts.push(`${e.deep_work_actual}h done`)
   if (e.social !== null) parts.push(e.social ? 'social' : 'solo')
   return parts.join(' · ')
-}
-
-function labelGym(g: string): string {
-  return g === 'rest' ? 'rest' : g
 }

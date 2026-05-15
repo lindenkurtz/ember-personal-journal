@@ -116,6 +116,33 @@ export default function Settings() {
         </p>
       </section>
 
+      <section className="settings__card">
+        <div className="settings__row">
+          <div className="settings__rowText">
+            <h2 className="settings__rowTitle">Gym rest budget</h2>
+            <p className="settings__rowHint">
+              How many rest days per week before the streak resets. Counted Mon–Sun.
+            </p>
+          </div>
+        </div>
+
+        <label className="settings__field">
+          <span>Rest days per week</span>
+          <input
+            type="number"
+            min={0}
+            max={7}
+            step={1}
+            value={settings?.rest_days_per_week ?? 3}
+            disabled={!settings}
+            onChange={(e) => {
+              const n = Math.max(0, Math.min(7, Math.round(Number(e.target.value) || 0)))
+              patchSettings({ rest_days_per_week: n })
+            }}
+          />
+        </label>
+      </section>
+
       {error && <p className="settings__error">{error}</p>}
     </main>
   )

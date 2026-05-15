@@ -13,8 +13,7 @@ import '../pages/Morning.css' // share the journal layout/buttons
 
 const GYM_OPTIONS = [
   { value: 'yes', label: 'Yes' },
-  { value: 'no', label: 'No' },
-  { value: 'rest', label: 'Rest day' }
+  { value: 'no', label: 'No' }
 ] as const
 
 const SOCIAL_OPTIONS = [

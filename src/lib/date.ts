@@ -1,4 +1,4 @@
-import { format, subDays } from 'date-fns'
+import { format, parseISO, startOfWeek, subDays } from 'date-fns'
 
 /** ISO date key (YYYY-MM-DD) for "today" in the user's local timezone. */
 export function todayKey(d: Date = new Date()): string {
@@ -19,4 +19,9 @@ export function lastNDays(n: number, today: Date = new Date()): string[] {
 /** Human label like "Wed, May 14" for headers. */
 export function prettyDay(d: Date = new Date()): string {
   return format(d, 'EEE, MMM d')
+}
+
+/** Monday-of-the-week ISO date key for a given YYYY-MM-DD. Used to bucket entries into calendar weeks. */
+export function weekStartKey(dateKey: string): string {
+  return dayKey(startOfWeek(parseISO(dateKey), { weekStartsOn: 1 }))
 }

@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { todayKey, lastNDays } from './date'
 
-export type GymChoice = 'yes' | 'no' | 'rest'
+export type GymChoice = 'yes' | 'no'
 
 /** Shape of a single daily entry. One row per date. */
 export interface Entry {

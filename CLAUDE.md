@@ -4,17 +4,24 @@ Project guidance for Claude Code when working in this repo. Keep it tight — on
 
 ## What this is
 
-**Ember** — a single-user PWA journal for daily sleep / gym / deep work / social tracking. React + Vite SPA, Supabase persistence, deployed as a static site to Cloudflare Pages with one Pages Function for the Anthropic proxy. Auth is delegated to Cloudflare Access — there is no in-app login.
+**Ember** — a single-user PWA journal for daily sleep / gym / deep work / social tracking. React + Vite SPA, Supabase persistence, deployed as a static site to Cloudflare Pages with one Pages Function (Anthropic proxy in [functions/](functions/)) and one separate Cloudflare Worker (cron-scheduled push-notification dispatcher in [worker/](worker/)). Auth is delegated to Cloudflare Access — there is no in-app login.
 
 ## Architecture (the parts worth knowing)
 
-- **Two TypeScript projects.** The SPA (`src/`) uses DOM types; the Pages Function (`functions/`) uses `@cloudflare/workers-types`. They conflict if combined, so [tsconfig.json](tsconfig.json) is a solution-style references file pointing at [tsconfig.app.json](tsconfig.app.json) and [tsconfig.functions.json](tsconfig.functions.json). `tsc -b` builds both. If you add a file under `functions/`, it gets Workers types; under `src/`, DOM types.
+- **Five TypeScript projects, one solution.** DOM types, WebWorker types, and Workers types all conflict if combined, so [tsconfig.json](tsconfig.json) is a solution-style references file and `tsc -b` builds the lot:
+  - [tsconfig.app.json](tsconfig.app.json) — SPA (`src/`), DOM types. Explicitly excludes `src/sw.ts`.
+  - [tsconfig.functions.json](tsconfig.functions.json) — Pages Function (`functions/`), Workers types.
+  - [tsconfig.sw.json](tsconfig.sw.json) — service worker (`src/sw.ts`), `WebWorker` lib. Separated from the app config because DOM and WebWorker conflict on `self`/`addEventListener`.
+  - [worker/tsconfig.json](worker/tsconfig.json) — cron Worker, Workers types.
+  - When you add a file, drop it under the directory whose tsconfig matches the runtime; don't reach across.
 
 - **Anthropic key never enters the browser.** All calls go through [functions/api/claude.ts](functions/api/claude.ts), which reads `ANTHROPIC_API_KEY` from the Pages env. Stream mode pipes Anthropic's SSE through unchanged — the client at [src/lib/claude.ts](src/lib/claude.ts) parses `content_block_delta` frames. The model is hardcoded as `MODEL` in the function; change it there, not in the SPA.
 
-- **Supabase access goes through [src/lib/entries.ts](src/lib/entries.ts).** Never call `supabase.from('entries')` from a component. The schema is one row per `date`; morning and evening both `upsert` on the primary key, never insert duplicates.
+- **One Supabase lib module per table.** [src/lib/entries.ts](src/lib/entries.ts) owns `entries`; [src/lib/settings.ts](src/lib/settings.ts) owns the singleton `push_settings` row; [src/lib/push.ts](src/lib/push.ts) owns `push_subscriptions` plus the browser subscribe flow. Never call `supabase.from(...)` directly from a component. The `entries` schema is one row per `date`; morning and evening both `upsert` on the primary key, never insert duplicates.
 
-- **Routing:** `/` = Dashboard, `/morning`, `/evening`, `/patterns`. `/dashboard` redirects to `/` for legacy links. Evening accepts `?date=YYYY-MM-DD` to back-fill a missed previous day.
+- **Routing:** `/` = Dashboard, `/morning`, `/evening`, `/patterns`, `/settings`. `/dashboard` redirects to `/` for legacy links. Evening accepts `?date=YYYY-MM-DD` to back-fill a missed previous day.
+
+- **Push notifications are a two-piece system.** Client subscribe flow + permission gating live in [src/lib/push.ts](src/lib/push.ts); the SW `push` / `notificationclick` handlers in [src/sw.ts](src/sw.ts). VAPID public key is bundled as `VITE_VAPID_PUBLIC_KEY`. The server-side sender is a **separate Cloudflare Worker** in [worker/](worker/) (not a Pages Function — Pages Functions can't cron). It runs every 5 minutes, computes current time in `push_settings.timezone` via `Intl.DateTimeFormat`, smart-skips when today's check-in fields are already filled, dedupes via `last_morning_sent` / `last_evening_sent`, and prunes `410 Gone` endpoints. Web Push (RFC 8291 aes128gcm + VAPID JWT) is hand-rolled with Web Crypto in [worker/src/webpush.ts](worker/src/webpush.ts) — **don't add the `web-push` npm package**, it's Node-only and won't run on Workers.
 
 ## Conventions
 
@@ -24,7 +31,7 @@ Project guidance for Claude Code when working in this repo. Keep it tight — on
 
 - **Date keys** are ISO `YYYY-MM-DD` strings in the user's local timezone. Always go through [src/lib/date.ts](src/lib/date.ts) (`todayKey`, `dayKey`, `lastNDays`) — never `new Date().toISOString().slice(0, 10)` (that's UTC and will flip days for the user).
 
-- **One useEffect, prefill draft, ignore errors gracefully.** Pages that read existing entries (Morning, Evening, Dashboard) seed their state from Supabase but never throw — if the network or config is broken, the UI still works for fresh input. Follow the pattern in [src/pages/Morning.tsx](src/pages/Morning.tsx) when adding new pages.
+- **One useEffect, prefill draft, ignore errors gracefully.** Pages that read existing rows (Morning, Evening, Dashboard, Settings) seed their state from Supabase but never throw — if the network or config is broken, the UI still works for fresh input. Follow the `Promise.all + setState + cancel-flag` pattern in [src/pages/Morning.tsx](src/pages/Morning.tsx) or [src/pages/Settings.tsx](src/pages/Settings.tsx) when adding new pages.
 
 - **No comments restating what the code does.** Comments only explain *why* — a non-obvious constraint, a deliberate skip, a workaround. See the existing files for tone.
 
@@ -34,16 +41,24 @@ Project guidance for Claude Code when working in this repo. Keep it tight — on
 npm run dev              # SPA only, no /api/claude
 npm run build            # tsc -b && vite build, outputs to dist/
 npm run pages:dev        # wrangler pages dev dist — needed to exercise the Anthropic proxy
+
+cd worker && npm run dev     # wrangler dev — local cron Worker
+cd worker && npm run tick    # wrangler dev --test-scheduled — fires the scheduled handler immediately
+cd worker && npm run deploy  # wrangler deploy
 ```
 
-For the function locally, drop `ANTHROPIC_API_KEY=...` into `.dev.vars` (gitignored). For Supabase, `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+For the function locally, drop `ANTHROPIC_API_KEY=...` into `.dev.vars` (gitignored). For Supabase, `.env` with `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_VAPID_PUBLIC_KEY`.
 
-After changes, **always run `npm run build`** — it typechecks both TS projects via `tsc -b` plus produces the Vite + PWA output. A passing build is the signal of correctness; there is no test suite by design (single-user, low blast radius).
+After changes, **always run `npm run build`** from the project root — `tsc -b` typechecks all four sub-projects (SPA, Pages Function, service worker, cron Worker) via the references in [tsconfig.json](tsconfig.json), then Vite + PWA produces the output. A passing build is the signal of correctness; there is no test suite by design (single-user, low blast radius).
 
 ## Gotchas
 
 - The `VITE_` prefix matters. `VITE_*` env vars are bundled into the client; everything else is server-side only. Don't move the Anthropic key into a `VITE_*` var "for convenience."
-- The service worker uses `registerType: 'autoUpdate'` with `registerSW({ immediate: true })`. On any deploy, the next navigation refreshes — no in-app prompt. Don't add one.
-- `/api/*` is configured `NetworkOnly` in the Workbox runtime cache (see [vite.config.ts](vite.config.ts)). Don't cache Anthropic responses; the input changes every day.
+- **Service worker is hand-written** at [src/sw.ts](src/sw.ts) (`injectManifest` strategy). Workbox precaching + runtime caching rules live in that file now — **not in [vite.config.ts](vite.config.ts)**. If you add a new cached route, edit `src/sw.ts`. `/api/*` is `NetworkOnly` there for a reason; don't cache Anthropic responses.
+- The SW still uses `registerType: 'autoUpdate'` with `registerSW({ immediate: true })` (in [src/main.tsx](src/main.tsx)). On any deploy, the next navigation refreshes — no in-app prompt. Don't add one.
+- **iOS push only works inside the home-screen-installed PWA**, not Safari tabs. `pushSupport()` in [src/lib/push.ts](src/lib/push.ts) gates the Settings toggle on `display-mode: standalone` || `navigator.standalone` for exactly this reason. Don't remove that check.
+- **`VITE_VAPID_PUBLIC_KEY` must be set in Cloudflare Pages env vars**, not just `.env` — `.env` is local-only. Build succeeds without it; the Settings toggle just stays disabled with a banner. Same `VITE_*` build-time pattern as the Supabase vars.
+- **Worker secrets live in Wrangler, not `.env`**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SUPABASE_URL`, `SUPABASE_KEY` are all set via `npx wrangler secret put` from `worker/`. Verify with `wrangler secret list`.
+- **Cron runs every 5 minutes, not at the configured times.** The Worker checks the user's local time inside the handler via `Intl.DateTimeFormat`. This is deliberate so DST flips don't require code changes; don't switch to per-time cron expressions or you'll create a twice-yearly maintenance burden.
 - Recharts dominates the bundle (~260kB gzipped total). Don't add another charting library; reuse the existing chart components or extend them.
-- Single user, no RLS on Supabase. If you ever expose this more broadly, the entries table needs `auth.uid()` policies — see the README schema.
+- Single user, no RLS on Supabase. If you ever expose this more broadly, the `entries`, `push_subscriptions`, and `push_settings` tables all need `auth.uid()` policies — see the README schema.

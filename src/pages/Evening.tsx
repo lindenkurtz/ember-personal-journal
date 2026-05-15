@@ -194,7 +194,7 @@ function StepView({
           onChange={(v) => setDraft({ ...draft, deep_work_actual: v })}
           min={0}
           max={12}
-          step={0.25}
+          step={0.5}
         />
       </QuestionCard>
     )

@@ -20,7 +20,7 @@ export default function NumberStepper({
   unit = 'h',
   ariaLabel
 }: Props) {
-  const clamp = (n: number) => Math.min(max, Math.max(min, +n.toFixed(1)))
+  const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n * 100) / 100))
   return (
     <div className="stepper" aria-label={ariaLabel}>
       <button

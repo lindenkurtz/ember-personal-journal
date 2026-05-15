@@ -241,16 +241,24 @@ function Question({
       <NumberStepper
         ariaLabel="Deep work target in hours"
         value={draft.deep_work_target}
-        onChange={(v) => setDraft({ ...draft, deep_work_target: v })}
+        onChange={(v) =>
+          setDraft({
+            ...draft,
+            deep_work_target: v,
+            deep_work_start: v === 0 ? null : draft.deep_work_start
+          })
+        }
         min={0}
         max={10}
         step={0.5}
       />
-      <TimeInput
-        ariaLabel="Planned start time"
-        value={draft.deep_work_start}
-        onChange={(v) => setDraft({ ...draft, deep_work_start: v })}
-      />
+      {draft.deep_work_target > 0 && (
+        <TimeInput
+          ariaLabel="Planned start time"
+          value={draft.deep_work_start}
+          onChange={(v) => setDraft({ ...draft, deep_work_start: v })}
+        />
+      )}
     </QuestionCard>
   )
 }
@@ -264,7 +272,9 @@ function isValid(step: Step, d: DraftMorning): boolean {
     case 'gym':
       return d.gym_intention !== null
     case 'focus':
-      return d.deep_work_target > 0 && !!d.deep_work_start
+      return d.deep_work_target === 0
+        ? true
+        : d.deep_work_target > 0 && !!d.deep_work_start
   }
 }
 

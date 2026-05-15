@@ -164,7 +164,8 @@ function morningSummary(e: Entry): string {
   const parts: string[] = []
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
   if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
-  if (e.deep_work_target) parts.push(`${e.deep_work_target}h target`)
+  if (e.deep_work_target !== null && e.deep_work_target !== undefined)
+    parts.push(`${e.deep_work_target}h target`)
   return parts.join(' · ')
 }
 

@@ -8,6 +8,7 @@ import PillGroup from '../components/PillGroup'
 import TimeInput from '../components/TimeInput'
 import NumberStepper from '../components/NumberStepper'
 import { upsertEntry, getEntry, getRange, GymChoice, Entry } from '../lib/entries'
+import { updateSettings } from '../lib/settings'
 import { callClaude } from '../lib/claude'
 import { todayKey, prettyDay } from '../lib/date'
 import './Morning.css'
@@ -58,6 +59,26 @@ export default function Morning() {
         }))
       })
       .catch(() => { /* offline / unconfigured — let the user fill manually */ })
+    return () => { cancelled = true }
+  }, [])
+
+  // Silent passive-context capture: best-effort lat/lon for the cron Worker's
+  // weather lookup. No UI, no banner — if the user denies the prompt or the
+  // API is missing we just don't populate the columns.
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return
+    let cancelled = false
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return
+        updateSettings({
+          latitude: Number(pos.coords.latitude.toFixed(6)),
+          longitude: Number(pos.coords.longitude.toFixed(6))
+        }).catch(() => { /* silent */ })
+      },
+      () => { /* denied / unavailable — silent */ },
+      { timeout: 10000, maximumAge: 60 * 60 * 1000 }
+    )
     return () => { cancelled = true }
   }, [])
 
@@ -293,7 +314,12 @@ function buildNudgePrompt(
     gym_a: e.gym_actual,
     dw_t: e.deep_work_target,
     dw_a: e.deep_work_actual,
-    soc: e.social
+    soc: e.social,
+    hrv: e.hrv_avg,
+    rhr: e.resting_hr,
+    steps: e.steps,
+    tempF: e.weather_temp_f,
+    wcode: e.weather_code
   }))
   return [
     "Schema (all fields nullable; null means the user didn't log it):",
@@ -305,6 +331,13 @@ function buildNudgePrompt(
     "- dw_t: deep-work target in hours (decimal, e.g. 2.5)",
     "- dw_a: deep-work actually completed in hours",
     "- soc: boolean — did they have meaningful social interaction that day",
+    "- hrv: average heart rate variability in ms (passive, sparsely populated, often null)",
+    "- rhr: resting heart rate in bpm (passive, sparsely populated, often null)",
+    "- steps: total step count for the day (passive, sparsely populated, often null)",
+    "- tempF: current outside temperature in °F at the morning check-in (passive, sparsely populated, often null)",
+    "- wcode: Open-Meteo WMO weather code (passive, sparsely populated, often null)",
+    "",
+    "HRV, resting heart rate, steps, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
     "",
     "Recent 14 days (most recent last):",
     JSON.stringify(history),

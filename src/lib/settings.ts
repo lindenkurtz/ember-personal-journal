@@ -7,9 +7,12 @@ export interface PushSettings {
   evening_time: string // 'HH:MM' in `timezone`
   timezone: string     // IANA, e.g. 'America/Denver'
   rest_days_per_week: number // 0–7, gym streak budget
+  latitude: number | null
+  longitude: number | null
+  location_name: string | null
 }
 
-const COLUMNS = 'id, enabled, morning_time, evening_time, timezone, rest_days_per_week'
+const COLUMNS = 'id, enabled, morning_time, evening_time, timezone, rest_days_per_week, latitude, longitude, location_name'
 
 const DEFAULTS: PushSettings = {
   id: 1,
@@ -17,7 +20,10 @@ const DEFAULTS: PushSettings = {
   morning_time: '08:00',
   evening_time: '21:30',
   timezone: 'America/Denver',
-  rest_days_per_week: 3
+  rest_days_per_week: 3,
+  latitude: null,
+  longitude: null,
+  location_name: null
 }
 
 export async function getSettings(): Promise<PushSettings> {

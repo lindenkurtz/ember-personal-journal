@@ -46,6 +46,12 @@ create table public.entries (
   deep_work_start   time,
   social            boolean,
   note              text,
+  -- Passive context (all nullable; the app never writes zero defaults):
+  hrv_avg           numeric(5,1),   -- ms, written by external iOS Shortcut
+  resting_hr        smallint,       -- bpm, written by external iOS Shortcut
+  steps             integer,        -- daily steps, written by external iOS Shortcut
+  weather_temp_f    numeric(4,1),   -- °F at morning check-in, written by cron Worker
+  weather_code      smallint,       -- Open-Meteo WMO code, written by cron Worker
   created_at        timestamptz default now(),
   updated_at        timestamptz default now()
 );
@@ -74,6 +80,10 @@ create table public.push_settings (
   timezone           text not null default 'America/Denver',
   last_morning_sent  date,
   last_evening_sent  date,
+  -- Used by the cron Worker to fetch weather from Open-Meteo:
+  latitude           numeric(9,6),
+  longitude          numeric(9,6),
+  location_name      text,
   updated_at         timestamptz default now()
 );
 
@@ -149,6 +159,36 @@ npx wrangler deploy
 ```
 
 To manually fire a notification (for testing): `curl https://<worker-domain>/?force=morning`.
+
+## External data ingestion (Apple Health)
+
+HRV, resting heart rate, and step count are **not** written by the app. They
+come from an iOS Shortcut that POSTs directly to the Supabase REST API. The
+app only needs the columns to exist (nullable).
+
+```
+POST {SUPABASE_URL}/rest/v1/entries
+Headers:
+  apikey: <anon key>
+  Authorization: Bearer <anon key>
+  Content-Type: application/json
+  Prefer: resolution=merge-duplicates
+
+Body:
+  { "date": "YYYY-MM-DD", "hrv_avg": 45.2, "resting_hr": 58, "steps": 8432 }
+```
+
+Notes:
+
+- Use `Prefer: resolution=merge-duplicates` so the POST upserts into today's
+  row alongside the morning/evening fields rather than failing on the primary
+  key conflict.
+- Omit fields you don't have a value for — never send `0` as a default.
+  Missing data must stay null so the Patterns analyzer can correctly identify
+  these as sparse signals.
+- Weather (`weather_temp_f`, `weather_code`) is populated automatically by the
+  cron Worker after each morning push, using the lat/lon from `push_settings`.
+  No external input needed.
 
 ## Notes
 

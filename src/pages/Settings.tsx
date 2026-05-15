@@ -143,8 +143,97 @@ export default function Settings() {
         </label>
       </section>
 
+      <LocationSection
+        settings={settings}
+        onLabel={(v) => patchSettings({ location_name: v || null })}
+        onCoords={(lat, lon) => patchSettings({ latitude: lat, longitude: lon })}
+      />
+
       {error && <p className="settings__error">{error}</p>}
     </main>
+  )
+}
+
+function LocationSection({
+  settings,
+  onLabel,
+  onCoords
+}: {
+  settings: PushSettings | null
+  onLabel: (v: string) => void
+  onCoords: (lat: number, lon: number) => void
+}) {
+  const [detectError, setDetectError] = useState<string | null>(null)
+  const [detecting, setDetecting] = useState(false)
+
+  function detect() {
+    if (!('geolocation' in navigator)) {
+      setDetectError('Geolocation isn’t available in this browser.')
+      return
+    }
+    setDetectError(null)
+    setDetecting(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        onCoords(
+          Number(pos.coords.latitude.toFixed(6)),
+          Number(pos.coords.longitude.toFixed(6))
+        )
+        setDetecting(false)
+      },
+      () => {
+        setDetectError('Couldn’t detect location — check your browser permissions.')
+        setDetecting(false)
+      },
+      { timeout: 10000 }
+    )
+  }
+
+  const lat = settings?.latitude
+  const lon = settings?.longitude
+  const hasCoords = lat != null && lon != null
+
+  return (
+    <section className="settings__card">
+      <div className="settings__row">
+        <div className="settings__rowText">
+          <h2 className="settings__rowTitle">Location</h2>
+          <p className="settings__rowHint">
+            Used silently to attach weather to your daily entries. A free-text
+            label is just for your reference; coordinates power the weather lookup.
+          </p>
+        </div>
+      </div>
+
+      <label className="settings__field">
+        <span>Label</span>
+        <input
+          type="text"
+          placeholder="e.g. your city"
+          value={settings?.location_name ?? ''}
+          disabled={!settings}
+          onChange={(e) => onLabel(e.target.value)}
+        />
+      </label>
+
+      <div className="settings__detectRow">
+        <button
+          type="button"
+          className="settings__detect"
+          onClick={detect}
+          disabled={!settings || detecting}
+        >
+          {detecting ? 'Detecting…' : 'Detect automatically'}
+        </button>
+        {hasCoords && (
+          <p className="settings__rowHint">
+            Current: {lat!.toFixed(4)}, {lon!.toFixed(4)}
+          </p>
+        )}
+      </div>
+
+      {detectError && <p className="settings__error">{detectError}</p>}
+    </section>
   )
 }
 

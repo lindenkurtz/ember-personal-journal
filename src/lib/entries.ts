@@ -15,6 +15,11 @@ export interface Entry {
   deep_work_start: string | null // 'HH:MM'
   social: boolean | null
   note: string | null
+  hrv_avg: number | null
+  resting_hr: number | null
+  steps: number | null
+  weather_temp_f: number | null
+  weather_code: number | null
 }
 
 /** Partial entry used by morning/evening upserts. `date` is required. */

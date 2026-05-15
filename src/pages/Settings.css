@@ -117,7 +117,8 @@
 }
 
 .settings__field input[type='time'],
-.settings__field input[type='number'] {
+.settings__field input[type='number'],
+.settings__field input[type='text'] {
   appearance: none;
   background: transparent;
   border: none;
@@ -130,8 +131,40 @@
 }
 
 .settings__field input[type='time']:disabled,
-.settings__field input[type='number']:disabled {
+.settings__field input[type='number']:disabled,
+.settings__field input[type='text']:disabled {
   color: var(--muted);
+}
+
+.settings__detectRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings__detect {
+  appearance: none;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.settings__detect:hover:not(:disabled) {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.settings__detect:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings__tz {

@@ -95,6 +95,11 @@ function buildPrompt(entries: Entry[]): string {
     dw_t: e.deep_work_target,
     dw_a: e.deep_work_actual,
     soc: e.social,
+    hrv: e.hrv_avg,
+    rhr: e.resting_hr,
+    steps: e.steps,
+    tempF: e.weather_temp_f,
+    wcode: e.weather_code,
     note: e.note
   }))
   return [
@@ -103,7 +108,12 @@ function buildPrompt(entries: Entry[]): string {
     "",
     "Field key:",
     "  bed = bedtime, sleep = quality 1–5, gym_i = morning intention, gym_a = actual,",
-    "  dw_t = deep work target hours, dw_a = actual hours, soc = had social time, note = freetext notes about the day (may include trip-ups, wins, or general context).",
+    "  dw_t = deep work target hours, dw_a = actual hours, soc = had social time,",
+    "  hrv = average HRV (ms), rhr = resting heart rate (bpm), steps = daily step count,",
+    "  tempF = outside temp at morning check-in (°F), wcode = Open-Meteo WMO weather code,",
+    "  note = freetext notes about the day (may include trip-ups, wins, or general context).",
+    "",
+    "HRV, resting heart rate, steps, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
     "",
     "Write the analysis."
   ].join('\n')

@@ -214,8 +214,8 @@ function StepView({
   return (
     <QuestionCard
       stepKey="note"
-      question="Anything in the way?"
-      hint="Optional — what tripped you up or worked well."
+      question="Anything to note?"
+      hint="Optional — what tripped you up, what worked well, or anything else worth remembering."
     >
       <NoteInput
         ariaLabel="Evening note"

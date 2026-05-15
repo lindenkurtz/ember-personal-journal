@@ -103,7 +103,7 @@ function buildPrompt(entries: Entry[]): string {
     "",
     "Field key:",
     "  bed = bedtime, sleep = quality 1–5, gym_i = morning intention, gym_a = actual,",
-    "  dw_t = deep work target hours, dw_a = actual hours, soc = had social time, note = freetext.",
+    "  dw_t = deep work target hours, dw_a = actual hours, soc = had social time, note = freetext notes about the day (may include trip-ups, wins, or general context).",
     "",
     "Write the analysis."
   ].join('\n')

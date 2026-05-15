@@ -33,6 +33,8 @@ Project guidance for Claude Code when working in this repo. Keep it tight — on
 
 - **One useEffect, prefill draft, ignore errors gracefully.** Pages that read existing rows (Morning, Evening, Dashboard, Settings) seed their state from Supabase but never throw — if the network or config is broken, the UI still works for fresh input. Follow the `Promise.all + setState + cancel-flag` pattern in [src/pages/Morning.tsx](src/pages/Morning.tsx) or [src/pages/Settings.tsx](src/pages/Settings.tsx) when adding new pages.
 
+- **Gym streak uses a weekly rest budget.** `gymStreak(entries, budget)` in [src/lib/streaks.ts](src/lib/streaks.ts) groups `'no'` days by Mon–Sun calendar week (via `weekStartKey` in [src/lib/date.ts](src/lib/date.ts)); once a week's `'no'` count exceeds `push_settings.rest_days_per_week`, every `'no'` in that week breaks the streak. `GymChoice` is `'yes' | 'no'` — there is no `'rest'` value; that's the budget's job. Any page that displays the streak must load settings alongside entries so the budget is available (see [src/pages/Dashboard.tsx](src/pages/Dashboard.tsx)).
+
 - **No comments restating what the code does.** Comments only explain *why* — a non-obvious constraint, a deliberate skip, a workaround. See the existing files for tone.
 
 ## Workflow

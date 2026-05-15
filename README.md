@@ -57,6 +57,27 @@ begin new.updated_at = now(); return new; end $$;
 create trigger entries_set_updated_at
 before update on public.entries
 for each row execute function public.set_updated_at();
+
+-- Web Push for daily check-in reminders.
+create table public.push_subscriptions (
+  endpoint   text primary key,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz default now()
+);
+
+create table public.push_settings (
+  id                 integer primary key default 1 check (id = 1),
+  enabled            boolean not null default true,
+  morning_time       text not null default '08:00',
+  evening_time       text not null default '21:30',
+  timezone           text not null default 'America/Denver',
+  last_morning_sent  date,
+  last_evening_sent  date,
+  updated_at         timestamptz default now()
+);
+
+insert into public.push_settings (id) values (1) on conflict do nothing;
 ```
 
 Since the app sits behind Cloudflare Access (single user), RLS isn't required.
@@ -91,12 +112,43 @@ src/styles/               theme.css (palette tokens), global.css
 - `/dashboard` — streaks, dot calendar, weekly deep-work bars, sleep trend, social row
 - `/evening` — reached from the dashboard; updates today's row in place
 - `/patterns` — on-demand 30-day analysis from Claude, streamed in
+- `/settings` — reminder times, push subscription toggle
 
 ## Icons
 
 The manifest ships with the bundled SVG. For a polished iOS home-screen icon,
 drop a 180×180 PNG at `public/apple-touch-icon.png` and uncomment the
 `<link rel="apple-touch-icon">` in `index.html`.
+
+## Push notifications
+
+Daily reminders are sent by a separate Cloudflare Worker in [worker/](worker/)
+that runs on a 5-minute cron, checks current local time against
+`push_settings.{morning,evening}_time`, and only fires if the matching
+check-in fields for today are still empty. Notifications work on iPhone only
+after the user does **Share → Add to Home Screen** (iOS 16.4+).
+
+One-time setup:
+
+```bash
+# 1. Generate VAPID keypair
+npx web-push generate-vapid-keys
+
+# 2. SPA — put the public key in .env so the subscribe flow can use it
+echo "VITE_VAPID_PUBLIC_KEY=<public>" >> .env
+
+# 3. Worker — install + push secrets
+cd worker
+npm install
+npx wrangler secret put VAPID_PUBLIC_KEY      # paste public
+npx wrangler secret put VAPID_PRIVATE_KEY     # paste private
+npx wrangler secret put VAPID_SUBJECT         # mailto:you@example.com
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_KEY          # anon is fine, no RLS
+npx wrangler deploy
+```
+
+To manually fire a notification (for testing): `curl https://<worker-domain>/?force=morning`.
 
 ## Notes
 

@@ -51,6 +51,31 @@
   background: var(--amber-soft);
 }
 
+.dash__headerLinks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash__iconLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.dash__iconLink:hover {
+  color: var(--amber);
+  border-color: var(--amber-soft);
+  background: var(--amber-soft);
+}
+
 .dash__checkins {
   display: flex;
   flex-direction: column;

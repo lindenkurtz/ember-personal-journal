@@ -3,6 +3,7 @@ import Morning from './pages/Morning'
 import Dashboard from './pages/Dashboard'
 import Evening from './pages/Evening'
 import Patterns from './pages/Patterns'
+import Settings from './pages/Settings'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/morning" element={<Morning />} />
         <Route path="/evening" element={<Evening />} />
         <Route path="/patterns" element={<Patterns />} />
+        <Route path="/settings" element={<Settings />} />
         {/* Old /dashboard path kept as a redirect so any saved links still resolve. */}
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

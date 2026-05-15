@@ -7,6 +7,15 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Custom service worker so we can handle `push` and `notificationclick`
+      // events for the daily check-in reminders. Workbox runtime caching now
+      // lives inline in src/sw.ts.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}']
+      },
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Ember',
@@ -33,24 +42,6 @@ export default defineConfig({
             "type": "image/png",
             "purpose": "maskable"
         }]
-      },
-      workbox: {
-        // Don't ever cache the Anthropic proxy or Supabase REST calls.
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkOnly'
-          },
-          {
-            urlPattern: ({ url }) => url.hostname.endsWith('.supabase.co'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase',
-              networkTimeoutSeconds: 5
-            }
-          }
-        ]
       }
     })
   ],

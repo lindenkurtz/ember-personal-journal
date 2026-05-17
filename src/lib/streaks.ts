@@ -1,19 +1,25 @@
 import { Entry } from './entries'
 import { lastNDays, todayKey, weekStartKey } from './date'
 
+export type DayResult = 'pass' | 'fail' | 'undecided'
+
 /**
- * Counts consecutive days ending today where a predicate held.
- * Missing entries break the streak (no row = not logged = not counted).
+ * Counts consecutive "pass" days ending today, skipping "undecided" days
+ * (no row, or the deciding field is still null), and stopping at the first
+ * "fail" — the only thing that proves the streak broke.
  */
-export function streak(entries: Entry[], pred: (e: Entry) => boolean): number {
-  // Index by date for O(1) lookup against the date window.
+export function streak(
+  entries: Entry[],
+  classify: (e: Entry | undefined) => DayResult,
+): number {
   const byDate = new Map(entries.map((e) => [e.date, e]))
   const days = lastNDays(60).slice().reverse() // walk back from today
   let n = 0
   for (const d of days) {
-    const e = byDate.get(d)
-    if (e && pred(e)) n++
-    else break
+    const r = classify(byDate.get(d))
+    if (r === 'pass') n++
+    else if (r === 'fail') break
+    // undecided: skip without breaking
   }
   return n
 }
@@ -33,11 +39,9 @@ export function gymStreak(entries: Entry[], restBudget: number): number {
     }
   }
   return streak(entries, (e) => {
-    if (e.gym_actual === 'yes') return true
-    if (e.gym_actual === 'no') {
-      return (noByWeek.get(weekStartKey(e.date)) ?? 0) <= restBudget
-    }
-    return false
+    if (!e || e.gym_actual == null) return 'undecided'
+    if (e.gym_actual === 'yes') return 'pass'
+    return (noByWeek.get(weekStartKey(e.date)) ?? 0) <= restBudget ? 'pass' : 'fail'
   })
 }
 
@@ -52,4 +56,7 @@ export function restDaysLeft(entries: Entry[], restBudget: number): number {
 }
 
 export const deepWorkStreak = (entries: Entry[]) =>
-  streak(entries, (e) => (e.deep_work_actual ?? 0) >= (e.deep_work_target ?? Infinity))
+  streak(entries, (e) => {
+    if (!e || e.deep_work_actual == null) return 'undecided'
+    return e.deep_work_actual >= (e.deep_work_target ?? Infinity) ? 'pass' : 'fail'
+  })

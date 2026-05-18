@@ -8,7 +8,7 @@ import PillGroup from '../components/PillGroup'
 import TimeInput from '../components/TimeInput'
 import NumberStepper from '../components/NumberStepper'
 import { upsertEntry, getEntry, getRange, GymChoice, Entry } from '../lib/entries'
-import { updateSettings } from '../lib/settings'
+import { getSettings, updateSettings } from '../lib/settings'
 import { callClaude } from '../lib/claude'
 import { todayKey, prettyDay } from '../lib/date'
 import './Morning.css'
@@ -63,22 +63,43 @@ export default function Morning() {
   }, [])
 
   // Silent passive-context capture: best-effort lat/lon for the cron Worker's
-  // weather lookup. No UI, no banner — if the user denies the prompt or the
-  // API is missing we just don't populate the columns.
+  // weather lookup. We deliberately avoid calling getCurrentPosition unless
+  // (a) we have no cached coords AND (b) the permission is already granted
+  // — otherwise iOS standalone PWAs re-prompt every session. The Settings
+  // page's "Detect automatically" button is the one explicit place that
+  // can trigger a new prompt.
   useEffect(() => {
     if (!('geolocation' in navigator)) return
     let cancelled = false
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return
-        updateSettings({
-          latitude: Number(pos.coords.latitude.toFixed(6)),
-          longitude: Number(pos.coords.longitude.toFixed(6))
-        }).catch(() => { /* silent */ })
-      },
-      () => { /* denied / unavailable — silent */ },
-      { timeout: 10000, maximumAge: 60 * 60 * 1000 }
-    )
+    ;(async () => {
+      const existing = await getSettings().catch(() => null)
+      if (cancelled) return
+      if (existing && existing.latitude != null && existing.longitude != null) return
+
+      const perms = navigator.permissions
+      if (perms && perms.query) {
+        try {
+          const status = await perms.query({ name: 'geolocation' as PermissionName })
+          if (cancelled) return
+          if (status.state !== 'granted') return
+        } catch {
+          // Older Safari rejects the query — fall through to getCurrentPosition,
+          // matching the prior unconditional behavior on those browsers.
+        }
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return
+          updateSettings({
+            latitude: Number(pos.coords.latitude.toFixed(6)),
+            longitude: Number(pos.coords.longitude.toFixed(6))
+          }).catch(() => { /* silent */ })
+        },
+        () => { /* denied / unavailable — silent */ },
+        { timeout: 10000, maximumAge: 60 * 60 * 1000 }
+      )
+    })()
     return () => { cancelled = true }
   }, [])
 

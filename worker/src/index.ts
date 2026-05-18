@@ -28,6 +28,7 @@ interface Entry {
   sleep_quality: number | null
   gym_actual: string | null
   deep_work_actual: number | null
+  weather_temp_f: number | null
 }
 
 export default {
@@ -66,11 +67,24 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
 
   const todayEntry = await getEntry(supabase, dateKey)
 
+  // Passive weather snapshot — runs once per local day when we have coords,
+  // independent of push send. The dedupe guard means Open-Meteo is hit at
+  // most once per day regardless of how many 5-min ticks happen, and it
+  // works even when no push subscriptions exist or the morning push is
+  // skipped because the check-in is already filled.
+  if (
+    settings.latitude != null &&
+    settings.longitude != null &&
+    (todayEntry == null || todayEntry.weather_temp_f == null)
+  ) {
+    await fetchAndStoreWeather(supabase, settings.latitude, settings.longitude, dateKey)
+  }
+
   if (force === 'morning' || dueMorning(settings, hhmm, dateKey, todayEntry)) {
-    await fire(supabase, env, 'morning', dateKey, settings)
+    await fire(supabase, env, 'morning', dateKey)
   }
   if (force === 'evening' || dueEvening(settings, hhmm, dateKey, todayEntry)) {
-    await fire(supabase, env, 'evening', dateKey, settings)
+    await fire(supabase, env, 'evening', dateKey)
   }
 }
 
@@ -90,14 +104,14 @@ function dueEvening(s: Settings, hhmm: string, dateKey: string, e: Entry | null)
 async function getEntry(supabase: SupabaseClient, date: string): Promise<Entry | null> {
   const { data, error } = await supabase
     .from('entries')
-    .select('date, bedtime, sleep_quality, gym_actual, deep_work_actual')
+    .select('date, bedtime, sleep_quality, gym_actual, deep_work_actual, weather_temp_f')
     .eq('date', date)
     .maybeSingle()
   if (error) throw error
   return (data as Entry | null) ?? null
 }
 
-async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: string, settings: Settings): Promise<void> {
+async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: string): Promise<void> {
   const { data: subs, error } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
@@ -131,13 +145,6 @@ async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: str
     } else if (r.status >= 400) {
       console.error(`[notifier] ${r.status} from push service`, await r.text())
     }
-  }
-
-  // Passive weather capture: piggyback on the morning send so we attach
-  // a snapshot to today's row before the user even opens the check-in.
-  // Failures here must never prevent the push from being marked sent.
-  if (slot === 'morning' && settings.latitude != null && settings.longitude != null) {
-    await fetchAndStoreWeather(supabase, settings.latitude, settings.longitude, dateKey)
   }
 
   // Mark this slot sent for today so subsequent ticks don't re-fire.

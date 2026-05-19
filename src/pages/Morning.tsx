@@ -331,6 +331,8 @@ function buildNudgePrompt(
     d: e.date,
     bed: e.bedtime,
     sleep: e.sleep_quality,
+    sleep_h: e.sleep_hours,
+    dq: e.day_quality,
     gym_i: e.gym_intention,
     gym_a: e.gym_actual,
     dw_t: e.deep_work_target,
@@ -346,7 +348,9 @@ function buildNudgePrompt(
     "Schema (all fields nullable; null means the user didn't log it):",
     "- d: date (YYYY-MM-DD)",
     "- bed: bedtime as 'HH:MM' local time the user went to sleep the night before. NOT a duration.",
-    "- sleep: self-reported sleep quality, integer 1–5 stars. NOT hours of sleep — sleep duration is not tracked.",
+    "- sleep: self-reported sleep quality, integer 1–5 stars. Subjective rating.",
+    "- sleep_h: objective sleep duration in hours from Apple Watch (passive, sparsely populated, often null). Complements `sleep` — `sleep` is the user's subjective rating, `sleep_h` is measured duration.",
+    "- dq: self-reported day quality, integer 1–5 stars (logged in the evening, so often null for today).",
     "- gym_i: morning intention for the gym — 'yes' | 'no'",
     "- gym_a: evening report of whether they actually went — 'yes' | 'no'",
     "- dw_t: deep-work target in hours (decimal, e.g. 2.5)",
@@ -358,7 +362,7 @@ function buildNudgePrompt(
     "- tempF: current outside temperature in °F at the morning check-in (passive, sparsely populated, often null)",
     "- wcode: Open-Meteo WMO weather code (passive, sparsely populated, often null)",
     "",
-    "HRV, resting heart rate, steps, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
+    "HRV, resting heart rate, steps, sleep_h, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
     "",
     "Recent 14 days (most recent last):",
     JSON.stringify(history),
@@ -373,6 +377,6 @@ function buildNudgePrompt(
       deep_work_start: today.deep_work_start
     }),
     "",
-    "Write the nudge. Do not invent fields or units that are not in the schema. Never reference hours of sleep — that data does not exist."
+    "Write the nudge. Do not invent fields or units that are not in the schema. Only reference hours of sleep if `sleep_h` is non-null for the relevant day."
   ].join('\n')
 }

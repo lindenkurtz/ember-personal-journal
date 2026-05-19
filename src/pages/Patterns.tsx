@@ -7,9 +7,12 @@ import './Patterns.css'
 const SYSTEM_PROMPT = [
   "You are a thoughtful, honest journal companion analyzing the user's last 30 days of daily entries.",
   "Write in second person, conversational tone — like a friend who pays attention.",
-  "Look for: correlations (sleep ↔ gym, sleep ↔ deep work, social ↔ everything), trends across the month,",
-  "consistency gaps between intentions and actuals, and weekday vs weekend patterns.",
+  "Day quality (dq, 1–5) is the PRIMARY TARGET. Focus first on what predicts higher-vs-lower day quality",
+  "scores — sleep, gym, deep work, social, weather, and passive signals. Also surface: correlations",
+  "between the inputs, trends across the month, consistency gaps between intentions and actuals, and",
+  "weekday vs weekend patterns.",
   "Be specific — cite actual numbers where they help. Be honest — don't soften real misses.",
+  "sleep_hours is objective Apple Watch data while sleep_quality is the user's subjective rating — both are useful, and discrepancies between them (e.g. long sleep but low quality, or short sleep but high quality) are worth surfacing.",
   "Don't list bullets unless it's genuinely the clearest format. Prefer 3–5 short paragraphs.",
   "No preamble, no greeting, no sign-off. Don't restate the question."
 ].join(' ')
@@ -90,6 +93,8 @@ function buildPrompt(entries: Entry[]): string {
     d: e.date,
     bed: e.bedtime,
     sleep: e.sleep_quality,
+    sleep_h: e.sleep_hours,
+    dq: e.day_quality,
     gym_i: e.gym_intention,
     gym_a: e.gym_actual,
     dw_t: e.deep_work_target,
@@ -107,13 +112,16 @@ function buildPrompt(entries: Entry[]): string {
     JSON.stringify(rows),
     "",
     "Field key:",
-    "  bed = bedtime, sleep = quality 1–5, gym_i = morning intention, gym_a = actual,",
+    "  bed = bedtime, sleep = sleep quality 1–5 (subjective),",
+    "  sleep_h = sleep duration in hours from Apple Watch (objective, sparsely populated, often null),",
+    "  dq = day quality 1–5 (PRIMARY TARGET — find what predicts this),",
+    "  gym_i = morning intention, gym_a = actual,",
     "  dw_t = deep work target hours, dw_a = actual hours, soc = had social time,",
     "  hrv = average HRV (ms), rhr = resting heart rate (bpm), steps = daily step count,",
     "  tempF = outside temp at morning check-in (°F), wcode = Open-Meteo WMO weather code,",
     "  note = freetext notes about the day (may include trip-ups, wins, or general context).",
     "",
-    "HRV, resting heart rate, steps, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
+    "HRV, resting heart rate, steps, sleep_h, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
     "",
     "Write the analysis."
   ].join('\n')

@@ -39,6 +39,8 @@ create table public.entries (
   date              date primary key,
   bedtime           time,
   sleep_quality     smallint check (sleep_quality between 1 and 5),
+  sleep_hours       numeric(4,2),   -- objective duration in hours from Apple Watch, written by iOS Shortcut
+  day_quality       smallint check (day_quality between 1 and 5),
   gym_intention     text check (gym_intention in ('yes','no','rest')),
   gym_actual        text check (gym_actual    in ('yes','no','rest')),
   deep_work_target  numeric(4,1),
@@ -162,9 +164,9 @@ To manually fire a notification (for testing): `curl https://<worker-domain>/?fo
 
 ## External data ingestion (Apple Health)
 
-HRV, resting heart rate, and step count are **not** written by the app. They
-come from an iOS Shortcut that POSTs directly to the Supabase REST API. The
-app only needs the columns to exist (nullable).
+HRV, resting heart rate, step count, and sleep duration are **not** written
+by the app. They come from an iOS Shortcut that POSTs directly to the
+Supabase REST API. The app only needs the columns to exist (nullable).
 
 ```
 POST {SUPABASE_URL}/rest/v1/entries
@@ -175,7 +177,7 @@ Headers:
   Prefer: resolution=merge-duplicates
 
 Body:
-  { "date": "YYYY-MM-DD", "hrv_avg": 45.2, "resting_hr": 58, "steps": 8432 }
+  { "date": "YYYY-MM-DD", "hrv_avg": 45.2, "resting_hr": 58, "steps": 8432, "sleep_hours": 7.25 }
 ```
 
 Notes:
@@ -183,6 +185,11 @@ Notes:
 - Use `Prefer: resolution=merge-duplicates` so the POST upserts into today's
   row alongside the morning/evening fields rather than failing on the primary
   key conflict.
+- **Date keying:** `sleep_hours` is keyed to the morning the user woke up
+  (same day as `sleep_quality` and `bedtime`) — i.e. when the Shortcut runs
+  on morning D, `sleep_hours` is written to D, **not** D-1. The daily totals
+  (`hrv_avg`, `resting_hr`, `steps`) are keyed to the day they were measured,
+  which means they *are* backfilled to D-1 on the morning-D run.
 - Omit fields you don't have a value for — never send `0` as a default.
   Missing data must stay null so the Patterns analyzer can correctly identify
   these as sparse signals.

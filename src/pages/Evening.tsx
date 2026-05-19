@@ -7,6 +7,7 @@ import ProgressDots from '../components/ProgressDots'
 import PillGroup from '../components/PillGroup'
 import NumberStepper from '../components/NumberStepper'
 import NoteInput from '../components/NoteInput'
+import StarRating from '../components/StarRating'
 import { getEntry, upsertEntry, GymChoice, Entry } from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
 import '../pages/Morning.css' // share the journal layout/buttons
@@ -25,10 +26,11 @@ interface DraftEvening {
   gym_actual: GymChoice | null
   deep_work_actual: number
   social: boolean | null
+  day_quality: number | null
   note: string
 }
 
-const QUESTIONS = ['gym', 'deep', 'social', 'note'] as const
+const QUESTIONS = ['gym', 'deep', 'social', 'day_quality', 'note'] as const
 type Step = (typeof QUESTIONS)[number]
 
 export default function Evening() {
@@ -48,6 +50,7 @@ export default function Evening() {
     gym_actual: null,
     deep_work_actual: 0,
     social: null,
+    day_quality: null,
     note: ''
   })
   const [morning, setMorning] = useState<Entry | null>(null)
@@ -66,6 +69,7 @@ export default function Evening() {
           gym_actual: e.gym_actual ?? e.gym_intention ?? d.gym_actual,
           deep_work_actual: e.deep_work_actual ?? d.deep_work_actual,
           social: e.social ?? d.social,
+          day_quality: e.day_quality ?? d.day_quality,
           note: e.note ?? d.note
         }))
       })
@@ -98,6 +102,7 @@ export default function Evening() {
         gym_actual: draft.gym_actual,
         deep_work_actual: draft.deep_work_actual,
         social: draft.social,
+        day_quality: draft.day_quality,
         note: draft.note.trim() || null
       })
       navigate('/')
@@ -211,6 +216,16 @@ function StepView({
       </QuestionCard>
     )
   }
+  if (step === 'day_quality') {
+    return (
+      <QuestionCard stepKey="day_quality" question="How was today overall?">
+        <StarRating
+          value={draft.day_quality}
+          onChange={(v) => setDraft({ ...draft, day_quality: v })}
+        />
+      </QuestionCard>
+    )
+  }
   return (
     <QuestionCard
       stepKey="note"
@@ -235,6 +250,8 @@ function isValid(step: Step, d: DraftEvening): boolean {
       return d.deep_work_actual >= 0
     case 'social':
       return d.social !== null
+    case 'day_quality':
+      return d.day_quality !== null
     case 'note':
       return true // optional
   }

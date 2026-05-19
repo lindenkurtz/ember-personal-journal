@@ -8,6 +8,8 @@ export interface Entry {
   date: string // YYYY-MM-DD, primary key
   bedtime: string | null // 'HH:MM' last night
   sleep_quality: number | null // 1–5
+  sleep_hours: number | null // objective duration from Apple Watch, written by iOS Shortcut
+  day_quality: number | null // 1–5, evening self-report of the day overall
   gym_intention: GymChoice | null
   gym_actual: GymChoice | null
   deep_work_target: number | null // hours

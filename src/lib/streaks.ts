@@ -1,5 +1,6 @@
 import { Entry } from './entries'
 import { lastNDays, todayKey, weekStartKey } from './date'
+import { BudgetChange } from './settings'
 
 export type DayResult = 'pass' | 'fail' | 'undecided'
 
@@ -25,12 +26,36 @@ export function streak(
 }
 
 /**
- * Gym streak with a weekly rest budget. A 'no' day is "kept" only if the
- * total 'no' count within its calendar week (Mon–Sun) is at most `restBudget`.
- * Once a week's 'no' count exceeds budget, every 'no' day in that week breaks
- * the streak; 'yes' days in a blown week still count.
+ * Returns the rest-day budget effective during the week starting at
+ * `weekStart`. Walks `history` for the latest entry with `from <= weekStart`;
+ * falls back to `currentBudget` when history is empty or the week predates
+ * all entries.
  */
-export function gymStreak(entries: Entry[], restBudget: number): number {
+export function budgetForWeek(
+  weekStart: string,
+  history: BudgetChange[] | undefined,
+  currentBudget: number
+): number {
+  if (!history || history.length === 0) return currentBudget
+  let match: BudgetChange | null = null
+  for (const entry of history) {
+    if (entry.from <= weekStart) match = entry
+    else break
+  }
+  return match ? match.budget : currentBudget
+}
+
+/**
+ * Gym streak with a weekly rest budget. A 'no' day is "kept" only if the
+ * total 'no' count within its calendar week (Mon–Sun) is at most that week's
+ * budget. The budget is resolved per-week from `history` so a budget change
+ * never retroactively breaks past weeks.
+ */
+export function gymStreak(
+  entries: Entry[],
+  currentBudget: number,
+  history?: BudgetChange[]
+): number {
   const noByWeek = new Map<string, number>()
   for (const e of entries) {
     if (e.gym_actual === 'no') {
@@ -41,18 +66,25 @@ export function gymStreak(entries: Entry[], restBudget: number): number {
   return streak(entries, (e) => {
     if (!e || e.gym_actual == null) return 'undecided'
     if (e.gym_actual === 'yes') return 'pass'
-    return (noByWeek.get(weekStartKey(e.date)) ?? 0) <= restBudget ? 'pass' : 'fail'
+    const wk = weekStartKey(e.date)
+    const budget = budgetForWeek(wk, history, currentBudget)
+    return (noByWeek.get(wk) ?? 0) <= budget ? 'pass' : 'fail'
   })
 }
 
 /** Rest days remaining in the current Mon–Sun week. Clamped to 0. */
-export function restDaysLeft(entries: Entry[], restBudget: number): number {
+export function restDaysLeft(
+  entries: Entry[],
+  currentBudget: number,
+  history?: BudgetChange[]
+): number {
   const wk = weekStartKey(todayKey())
   let used = 0
   for (const e of entries) {
     if (e.gym_actual === 'no' && weekStartKey(e.date) === wk) used++
   }
-  return Math.max(0, restBudget - used)
+  const budget = budgetForWeek(wk, history, currentBudget)
+  return Math.max(0, budget - used)
 }
 
 export const deepWorkStreak = (entries: Entry[]) =>

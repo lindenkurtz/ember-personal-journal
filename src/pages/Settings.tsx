@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getSettings, updateSettings, PushSettings } from '../lib/settings'
+import { getSettings, updateSettings, setRestBudget, PushSettings } from '../lib/settings'
 import { getSubscription, pushSupport, subscribe, unsubscribe } from '../lib/push'
 import './Settings.css'
 
@@ -58,6 +58,25 @@ export default function Settings() {
       setSettings(saved)
     } catch (e) {
       console.error('[settings] save', e)
+      setError('Couldn’t save — try again.')
+    } finally {
+      setStatus('idle')
+    }
+  }
+
+  async function changeRestBudget(next: number) {
+    if (!settings) return
+    const clamped = Math.max(0, Math.min(7, Math.round(next)))
+    if (clamped === settings.rest_days_per_week) return
+    const optimistic = { ...settings, rest_days_per_week: clamped }
+    setSettings(optimistic)
+    setStatus('saving')
+    setError(null)
+    try {
+      const saved = await setRestBudget(settings, clamped)
+      setSettings(saved)
+    } catch (e) {
+      console.error('[settings] rest budget', e)
       setError('Couldn’t save — try again.')
     } finally {
       setStatus('idle')
@@ -126,21 +145,32 @@ export default function Settings() {
           </div>
         </div>
 
-        <label className="settings__field">
+        <div className="settings__field">
           <span>Rest days per week</span>
-          <input
-            type="number"
-            min={0}
-            max={7}
-            step={1}
-            value={settings?.rest_days_per_week ?? 3}
-            disabled={!settings}
-            onChange={(e) => {
-              const n = Math.max(0, Math.min(7, Math.round(Number(e.target.value) || 0)))
-              patchSettings({ rest_days_per_week: n })
-            }}
-          />
-        </label>
+          <div className="settings__stepper">
+            <button
+              type="button"
+              className="settings__stepperBtn"
+              aria-label="Decrease rest days"
+              disabled={!settings || status === 'saving' || (settings?.rest_days_per_week ?? 0) <= 0}
+              onClick={() => changeRestBudget((settings?.rest_days_per_week ?? 0) - 1)}
+            >
+              −
+            </button>
+            <span className="settings__stepperValue" aria-live="polite">
+              {settings?.rest_days_per_week ?? 3}
+            </span>
+            <button
+              type="button"
+              className="settings__stepperBtn"
+              aria-label="Increase rest days"
+              disabled={!settings || status === 'saving' || (settings?.rest_days_per_week ?? 7) >= 7}
+              onClick={() => changeRestBudget((settings?.rest_days_per_week ?? 0) + 1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
       </section>
 
       <LocationSection

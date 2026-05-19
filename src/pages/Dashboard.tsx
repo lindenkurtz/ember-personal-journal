@@ -37,8 +37,9 @@ export default function Dashboard() {
   }, [])
 
   const restBudget = settings?.rest_days_per_week ?? 3
-  const gym = gymStreak(entries, restBudget)
-  const restLeft = restDaysLeft(entries, restBudget)
+  const history = settings?.rest_budget_history
+  const gym = gymStreak(entries, restBudget, history)
+  const restLeft = restDaysLeft(entries, restBudget, history)
   const dw = deepWorkStreak(entries)
 
   const morningDone = isMorningDone(today)

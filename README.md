@@ -75,18 +75,24 @@ create table public.push_subscriptions (
 );
 
 create table public.push_settings (
-  id                 integer primary key default 1 check (id = 1),
-  enabled            boolean not null default true,
-  morning_time       text not null default '08:00',
-  evening_time       text not null default '21:30',
-  timezone           text not null default 'America/Denver',
-  last_morning_sent  date,
-  last_evening_sent  date,
+  id                   integer primary key default 1 check (id = 1),
+  enabled              boolean not null default true,
+  morning_time         text not null default '08:00',
+  evening_time         text not null default '21:30',
+  timezone             text not null default 'America/Denver',
+  last_morning_sent    date,
+  last_evening_sent    date,
+  -- Gym streak budget (current value) + per-week history so changing the budget
+  -- mid-streak doesn't retroactively break past weeks. See `setRestBudget` in
+  -- src/lib/settings.ts for the write path and `budgetForWeek` in src/lib/streaks.ts
+  -- for the read path.
+  rest_days_per_week   smallint not null default 3 check (rest_days_per_week between 0 and 7),
+  rest_budget_history  jsonb not null default '[]'::jsonb,
   -- Used by the cron Worker to fetch weather from Open-Meteo:
-  latitude           numeric(9,6),
-  longitude          numeric(9,6),
-  location_name      text,
-  updated_at         timestamptz default now()
+  latitude             numeric(9,6),
+  longitude            numeric(9,6),
+  location_name        text,
+  updated_at           timestamptz default now()
 );
 
 insert into public.push_settings (id) values (1) on conflict do nothing;

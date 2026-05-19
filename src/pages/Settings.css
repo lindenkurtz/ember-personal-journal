@@ -136,6 +136,53 @@
   color: var(--muted);
 }
 
+.settings__stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.settings__stepperBtn {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--text);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.settings__stepperBtn:hover:not(:disabled) {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.settings__stepperBtn:active:not(:disabled) {
+  background: var(--card-soft);
+}
+
+.settings__stepperBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.settings__stepperValue {
+  flex: 1;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
 .settings__detectRow {
   display: flex;
   align-items: center;

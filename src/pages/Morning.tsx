@@ -20,20 +20,22 @@ const GYM_OPTIONS = [
 
 interface DraftMorning {
   bedtime: string | null
+  wake_time: string | null
   sleep_quality: number | null
   gym_intention: GymChoice | null
   deep_work_target: number
   deep_work_start: string | null
 }
 
-const QUESTIONS = ['sleep', 'rating', 'gym', 'focus'] as const
+const QUESTIONS = ['bedtime', 'wake', 'rating', 'gym', 'focus'] as const
 type Step = (typeof QUESTIONS)[number]
 
 export default function Morning() {
   const navigate = useNavigate()
-  const [step, setStep] = useState<Step>('sleep')
+  const [step, setStep] = useState<Step>('bedtime')
   const [draft, setDraft] = useState<DraftMorning>({
     bedtime: null,
+    wake_time: null,
     sleep_quality: null,
     gym_intention: null,
     deep_work_target: 3,
@@ -52,6 +54,7 @@ export default function Morning() {
         if (cancelled || !e) return
         setDraft((d) => ({
           bedtime: e.bedtime ?? d.bedtime,
+          wake_time: e.wake_time ?? d.wake_time,
           sleep_quality: e.sleep_quality ?? d.sleep_quality,
           gym_intention: e.gym_intention ?? d.gym_intention,
           deep_work_target: e.deep_work_target ?? d.deep_work_target,
@@ -127,6 +130,7 @@ export default function Morning() {
       await upsertEntry({
         date,
         bedtime: draft.bedtime,
+        wake_time: draft.wake_time,
         sleep_quality: draft.sleep_quality,
         gym_intention: draft.gym_intention,
         deep_work_target: draft.deep_work_target,
@@ -237,10 +241,10 @@ function Question({
   draft: DraftMorning
   setDraft: (d: DraftMorning) => void
 }) {
-  if (step === 'sleep') {
+  if (step === 'bedtime') {
     return (
       <QuestionCard
-        stepKey="sleep"
+        stepKey="bedtime"
         question="When did you go to bed?"
         hint="Last night's bedtime — a rough estimate is fine."
       >
@@ -248,6 +252,21 @@ function Question({
           ariaLabel="Last night's bedtime"
           value={draft.bedtime}
           onChange={(v) => setDraft({ ...draft, bedtime: v })}
+        />
+      </QuestionCard>
+    )
+  }
+  if (step === 'wake') {
+    return (
+      <QuestionCard
+        stepKey="wake"
+        question="When did you wake up?"
+        hint="This morning's wake time — close enough is fine."
+      >
+        <TimeInput
+          ariaLabel="This morning's wake time"
+          value={draft.wake_time}
+          onChange={(v) => setDraft({ ...draft, wake_time: v })}
         />
       </QuestionCard>
     )
@@ -307,8 +326,10 @@ function Question({
 
 function isValid(step: Step, d: DraftMorning): boolean {
   switch (step) {
-    case 'sleep':
+    case 'bedtime':
       return !!d.bedtime
+    case 'wake':
+      return !!d.wake_time
     case 'rating':
       return d.sleep_quality !== null
     case 'gym':
@@ -330,6 +351,7 @@ function buildNudgePrompt(
   const history = recent.map((e) => ({
     d: e.date,
     bed: e.bedtime,
+    wake: e.wake_time,
     sleep: e.sleep_quality,
     sleep_h: e.sleep_hours,
     dq: e.day_quality,
@@ -348,6 +370,7 @@ function buildNudgePrompt(
     "Schema (all fields nullable; null means the user didn't log it):",
     "- d: date (YYYY-MM-DD)",
     "- bed: bedtime as 'HH:MM' local time the user went to sleep the night before. NOT a duration.",
+    "- wake: wake time as 'HH:MM' local time the user woke up on the row's date. NOT a duration.",
     "- sleep: self-reported sleep quality, integer 1–5 stars. Subjective rating.",
     "- sleep_h: objective sleep duration in hours from Apple Watch (passive, sparsely populated, often null). Complements `sleep` — `sleep` is the user's subjective rating, `sleep_h` is measured duration.",
     "- dq: self-reported day quality, integer 1–5 stars (logged in the evening, so often null for today).",
@@ -371,6 +394,7 @@ function buildNudgePrompt(
     JSON.stringify({
       date: today.date,
       bedtime: today.bedtime,
+      wake_time: today.wake_time,
       sleep_quality: today.sleep_quality,
       gym_intention: today.gym_intention,
       deep_work_target: today.deep_work_target,

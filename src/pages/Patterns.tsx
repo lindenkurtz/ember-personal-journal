@@ -92,6 +92,7 @@ function buildPrompt(entries: Entry[]): string {
   const rows = entries.map((e) => ({
     d: e.date,
     bed: e.bedtime,
+    wake: e.wake_time,
     sleep: e.sleep_quality,
     sleep_h: e.sleep_hours,
     dq: e.day_quality,
@@ -112,7 +113,8 @@ function buildPrompt(entries: Entry[]): string {
     JSON.stringify(rows),
     "",
     "Field key:",
-    "  bed = bedtime, sleep = sleep quality 1–5 (subjective),",
+    "  bed = bedtime, wake = wake time (both 'HH:MM' local, both user-entered, mirror sleep_h),",
+    "  sleep = sleep quality 1–5 (subjective),",
     "  sleep_h = sleep duration in hours from Apple Watch (objective, sparsely populated, often null),",
     "  dq = day quality 1–5 (PRIMARY TARGET — find what predicts this),",
     "  gym_i = morning intention, gym_a = actual,",

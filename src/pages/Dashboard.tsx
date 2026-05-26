@@ -154,7 +154,7 @@ export default function Dashboard() {
 }
 
 function isMorningDone(e: Entry | null): boolean {
-  return !!e && !!e.bedtime && e.sleep_quality !== null && e.gym_intention !== null
+  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null
 }
 
 function isEveningDone(e: Entry | null): boolean {
@@ -163,6 +163,7 @@ function isEveningDone(e: Entry | null): boolean {
 
 function morningSummary(e: Entry): string {
   const parts: string[] = []
+  if (e.bedtime && e.wake_time) parts.push(`bed ${e.bedtime} → wake ${e.wake_time}`)
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
   if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
   if (e.deep_work_target !== null && e.deep_work_target !== undefined)

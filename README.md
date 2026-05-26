@@ -38,6 +38,7 @@ Run once in the Supabase SQL editor:
 create table public.entries (
   date              date primary key,
   bedtime           time,
+  wake_time         time,           -- user-entered, this morning's wake time (same row-date semantics as bedtime)
   sleep_quality     smallint check (sleep_quality between 1 and 5),
   sleep_hours       numeric(4,2),   -- objective duration in hours from Apple Watch, written by iOS Shortcut
   day_quality       smallint check (day_quality between 1 and 5),
@@ -192,8 +193,9 @@ Notes:
   row alongside the morning/evening fields rather than failing on the primary
   key conflict.
 - **Date keying:** `sleep_hours` is keyed to the morning the user woke up
-  (same day as `sleep_quality` and `bedtime`) — i.e. when the Shortcut runs
-  on morning D, `sleep_hours` is written to D, **not** D-1. The daily totals
+  (same day as `sleep_quality`, `bedtime`, and `wake_time`) — i.e. when the
+  Shortcut runs on morning D, `sleep_hours` is written to D, **not** D-1.
+  The daily totals
   (`hrv_avg`, `resting_hr`, `steps`) are keyed to the day they were measured,
   which means they *are* backfilled to D-1 on the morning-D run.
 - Omit fields you don't have a value for — never send `0` as a default.

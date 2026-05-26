@@ -163,7 +163,6 @@ function isEveningDone(e: Entry | null): boolean {
 
 function morningSummary(e: Entry): string {
   const parts: string[] = []
-  if (e.bedtime && e.wake_time) parts.push(`bed ${e.bedtime} → wake ${e.wake_time}`)
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
   if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
   if (e.deep_work_target !== null && e.deep_work_target !== undefined)

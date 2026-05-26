@@ -25,7 +25,7 @@ export default function DeepWorkBarChart({ entries, days = 7 }: Props) {
       <BarChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid stroke="rgba(245,237,216,0.06)" vertical={false} />
         <XAxis dataKey="day" tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} />
-        <YAxis tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} width={32} />
+        <YAxis tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} width={32} allowDecimals={false} />
         <Tooltip
           cursor={{ fill: 'rgba(232,168,124,0.08)' }}
           contentStyle={{

@@ -42,6 +42,7 @@ export default function Morning() {
     deep_work_start: null
   })
   const [submitting, setSubmitting] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [nudge, setNudge] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -113,7 +114,7 @@ export default function Morning() {
   function next() {
     if (!canAdvance) return
     if (!isLast) setStep(QUESTIONS[idx + 1])
-    else void submit()
+    else void saveEntry()
   }
   function back() {
     // On the first question, the back button returns to the dashboard so the
@@ -122,7 +123,7 @@ export default function Morning() {
     else setStep(QUESTIONS[idx - 1])
   }
 
-  async function submit() {
+  async function saveEntry() {
     setSubmitting(true)
     setError(null)
     try {
@@ -136,6 +137,20 @@ export default function Morning() {
         deep_work_target: draft.deep_work_target,
         deep_work_start: draft.deep_work_start
       })
+      setSaved(true)
+    } catch (err) {
+      console.error(err)
+      setError("Couldn't save your entry. Check your connection and try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function requestNudge() {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const date = todayKey()
       // Pull last 14 days to ground the nudge in recent context.
       const recent = await getRange(14).catch(() => [] as Entry[])
       const text = await callClaude({
@@ -154,7 +169,7 @@ export default function Morning() {
     } catch (err) {
       console.error(err)
       setError("Couldn't reach the API — your entry was saved. Continuing.")
-      // Still consider the morning done; dashboard is the next destination.
+      // Entry is already saved; bail to dashboard so the user isn't stuck.
       setTimeout(() => navigate('/'), 1200)
     } finally {
       setSubmitting(false)
@@ -201,13 +216,41 @@ export default function Morning() {
               <div className="ember-glow__ring" />
               <p className="muted">Reading the last two weeks…</p>
             </motion.div>
+          ) : saved ? (
+            <motion.section
+              key="choose"
+              className="nudge-choice"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <p className="nudge-choice__title">Want a nudge for today?</p>
+              <p className="nudge-choice__sub">
+                Reads your last two weeks and writes a 1–2 sentence note.
+              </p>
+              {error && <p className="morning__error">{error}</p>}
+              <div className="nudge-choice__actions">
+                <button
+                  className="morning__ghost morning__ghost--wide"
+                  onClick={continueToDashboard}
+                >
+                  Skip to dashboard
+                </button>
+                <button
+                  className="morning__primary"
+                  onClick={() => void requestNudge()}
+                >
+                  Write me one →
+                </button>
+              </div>
+            </motion.section>
           ) : (
             <Question step={step} draft={draft} setDraft={setDraft} />
           )}
         </AnimatePresence>
       </div>
 
-      {!nudge && !submitting && (
+      {!nudge && !submitting && !saved && (
         <footer className="morning__footer">
           {error && <p className="morning__error">{error}</p>}
           <div className="morning__nav">

@@ -79,6 +79,15 @@
   cursor: not-allowed;
 }
 
+/* Wide variant for stand-alone use (e.g. nudge choice page) — the base
+ * .morning__ghost is a 56px square back-arrow on every question step. */
+.morning__ghost--wide {
+  flex: 1;
+  width: auto;
+  padding: 0 18px;
+  font-size: 16px;
+}
+
 .morning__primary {
   flex: 1;
   min-height: 56px;
@@ -156,6 +165,38 @@
 
 .nudge .morning__primary {
   position: relative;
+}
+
+/* --- Nudge choice card (opt-in to the Claude call) --- */
+.nudge-choice {
+  width: 100%;
+  max-width: 520px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  text-align: left;
+  box-shadow: var(--shadow-soft);
+}
+
+.nudge-choice__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.nudge-choice__sub {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.nudge-choice__actions {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
 }
 
 /* --- Ember-glow loading state --- */

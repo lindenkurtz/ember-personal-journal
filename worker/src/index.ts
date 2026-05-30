@@ -174,7 +174,7 @@ async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: str
     privateKey: env.VAPID_PRIVATE_KEY,
     subject: env.VAPID_SUBJECT
   }
-  const payload = JSON.stringify(payloadFor(slot))
+  const payload = JSON.stringify(payloadFor(slot, dateKey))
 
   const results = await Promise.allSettled(
     list.map((sub) => sendPush(sub, payload, vapid).then((r) => ({ sub, r })))
@@ -230,7 +230,7 @@ async function fetchAndStoreWeather(
   }
 }
 
-function payloadFor(slot: Slot): { title: string; body: string; tag: Slot; url: string } {
+function payloadFor(slot: Slot, dateKey: string): { title: string; body: string; tag: Slot; url: string } {
   if (slot === 'morning') {
     return {
       title: 'Morning check-in',
@@ -239,11 +239,13 @@ function payloadFor(slot: Slot): { title: string; body: string; tag: Slot; url: 
       url: '/morning'
     }
   }
+  // Pin the firing day into the URL. Without it, clicking an evening push after
+  // midnight lands on todayKey() — the next day — and back-fills the wrong row.
   return {
     title: 'Evening check-in',
     body: 'How did the day go?',
     tag: 'evening',
-    url: '/evening'
+    url: `/evening?date=${dateKey}`
   }
 }
 

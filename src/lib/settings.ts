@@ -14,12 +14,14 @@ export interface PushSettings {
   timezone: string     // IANA, e.g. 'America/Denver'
   rest_days_per_week: number // 0–7, current gym streak budget
   rest_budget_history: BudgetChange[] // sorted ascending by `from`; each entry locks in the budget effective from that week
+  deep_work_rest_budget: number // 0–7, current deep work streak budget
+  deep_work_rest_budget_history: BudgetChange[]
   latitude: number | null
   longitude: number | null
   location_name: string | null
 }
 
-const COLUMNS = 'id, enabled, morning_time, evening_time, timezone, rest_days_per_week, rest_budget_history, latitude, longitude, location_name'
+const COLUMNS = 'id, enabled, morning_time, evening_time, timezone, rest_days_per_week, rest_budget_history, deep_work_rest_budget, deep_work_rest_budget_history, latitude, longitude, location_name'
 
 const DEFAULTS: PushSettings = {
   id: 1,
@@ -29,6 +31,8 @@ const DEFAULTS: PushSettings = {
   timezone: 'America/Denver',
   rest_days_per_week: 3,
   rest_budget_history: [],
+  deep_work_rest_budget: 2,
+  deep_work_rest_budget_history: [],
   latitude: null,
   longitude: null,
   location_name: null
@@ -43,7 +47,12 @@ export async function getSettings(): Promise<PushSettings> {
   if (error) throw error
   if (!data) return DEFAULTS
   const row = data as PushSettings
-  return { ...row, rest_budget_history: row.rest_budget_history ?? [] }
+  return {
+    ...row,
+    rest_budget_history: row.rest_budget_history ?? [],
+    deep_work_rest_budget: row.deep_work_rest_budget ?? DEFAULTS.deep_work_rest_budget,
+    deep_work_rest_budget_history: row.deep_work_rest_budget_history ?? []
+  }
 }
 
 export async function updateSettings(patch: Partial<PushSettings>): Promise<PushSettings> {
@@ -54,7 +63,12 @@ export async function updateSettings(patch: Partial<PushSettings>): Promise<Push
     .single()
   if (error) throw error
   const row = data as PushSettings
-  return { ...row, rest_budget_history: row.rest_budget_history ?? [] }
+  return {
+    ...row,
+    rest_budget_history: row.rest_budget_history ?? [],
+    deep_work_rest_budget: row.deep_work_rest_budget ?? DEFAULTS.deep_work_rest_budget,
+    deep_work_rest_budget_history: row.deep_work_rest_budget_history ?? []
+  }
 }
 
 /**
@@ -86,4 +100,30 @@ export async function setRestBudget(
   }
 
   return updateSettings({ rest_days_per_week: newBudget, rest_budget_history: history })
+}
+
+export async function setDeepWorkRestBudget(
+  current: PushSettings,
+  newBudget: number
+): Promise<PushSettings> {
+  const oldBudget = current.deep_work_rest_budget
+  const history = [...(current.deep_work_rest_budget_history ?? [])]
+  const currentWeek = weekStartKey(todayKey())
+
+  if (history.length === 0) {
+    if (newBudget === oldBudget) {
+      return current
+    }
+    history.push({ from: '2000-01-01', budget: oldBudget })
+    history.push({ from: currentWeek, budget: newBudget })
+  } else {
+    const last = history[history.length - 1]
+    if (last.from === currentWeek) {
+      last.budget = newBudget
+    } else {
+      history.push({ from: currentWeek, budget: newBudget })
+    }
+  }
+
+  return updateSettings({ deep_work_rest_budget: newBudget, deep_work_rest_budget_history: history })
 }

@@ -8,7 +8,7 @@ interface Props {
   days?: number // default 7
 }
 
-/** Weekly deep-work hours: actual vs target, color-coded amber if hit, terracotta if short. */
+/** Weekly deep-work actual hours, amber when hours were logged, terracotta when zero. */
 export default function DeepWorkBarChart({ entries, days = 7 }: Props) {
   const byDate = new Map(entries.map((e) => [e.date, e]))
   const data = lastNDays(days).map((d) => {
@@ -16,8 +16,7 @@ export default function DeepWorkBarChart({ entries, days = 7 }: Props) {
     return {
       day: format(parseISO(d), 'EEE'),
       actual: e?.deep_work_actual ?? 0,
-      target: e?.deep_work_target ?? 0,
-      hit: (e?.deep_work_actual ?? 0) >= (e?.deep_work_target ?? Infinity)
+      hasEntry: e != null
     }
   })
   return (
@@ -34,11 +33,15 @@ export default function DeepWorkBarChart({ entries, days = 7 }: Props) {
             borderRadius: 12,
             color: 'var(--text)'
           }}
-          formatter={(v: number, name: string) => [`${v}h`, name]}
+          formatter={(v: number) => [`${v}h`]}
         />
-        <Bar dataKey="actual" radius={[6, 6, 0, 0]} name="actual">
+        <Bar dataKey="actual" radius={[6, 6, 0, 0]} name="hours">
           {data.map((d, i) => (
-            <Cell key={i} fill={d.hit ? 'var(--amber)' : 'var(--terracotta)'} fillOpacity={d.actual ? 1 : 0.15} />
+            <Cell
+              key={i}
+              fill={d.actual > 0 ? 'var(--amber)' : 'var(--terracotta)'}
+              fillOpacity={d.hasEntry ? 1 : 0.15}
+            />
           ))}
         </Bar>
       </BarChart>

@@ -5,8 +5,6 @@ import QuestionCard from '../components/QuestionCard'
 import ProgressDots from '../components/ProgressDots'
 import StarRating from '../components/StarRating'
 import PillGroup from '../components/PillGroup'
-import TimeInput from '../components/TimeInput'
-import NumberStepper from '../components/NumberStepper'
 import { upsertEntry, getEntry, getRange, GymChoice, Entry } from '../lib/entries'
 import { getSettings, updateSettings } from '../lib/settings'
 import { callClaude } from '../lib/claude'
@@ -18,13 +16,15 @@ const GYM_OPTIONS = [
   { value: 'no', label: 'No' }
 ] as const
 
+type DeepWorkPlanned = 'yes' | 'no'
+
 interface DraftMorning {
   bedtime: string | null
   wake_time: string | null
   sleep_quality: number | null
   gym_intention: GymChoice | null
-  deep_work_target: number
-  deep_work_start: string | null
+  deep_work_planned: DeepWorkPlanned | null
+  deep_work_plan_note: string
 }
 
 const QUESTIONS = ['bedtime', 'wake', 'rating', 'gym', 'focus'] as const
@@ -38,8 +38,8 @@ export default function Morning() {
     wake_time: null,
     sleep_quality: null,
     gym_intention: null,
-    deep_work_target: 3,
-    deep_work_start: null
+    deep_work_planned: null,
+    deep_work_plan_note: ''
   })
   const [submitting, setSubmitting] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -58,8 +58,8 @@ export default function Morning() {
           wake_time: e.wake_time ?? d.wake_time,
           sleep_quality: e.sleep_quality ?? d.sleep_quality,
           gym_intention: e.gym_intention ?? d.gym_intention,
-          deep_work_target: e.deep_work_target ?? d.deep_work_target,
-          deep_work_start: e.deep_work_start ?? d.deep_work_start
+          deep_work_planned: (e.deep_work_planned as DeepWorkPlanned | null) ?? d.deep_work_planned,
+          deep_work_plan_note: e.deep_work_plan_note ?? d.deep_work_plan_note
         }))
       })
       .catch(() => { /* offline / unconfigured — let the user fill manually */ })
@@ -134,8 +134,10 @@ export default function Morning() {
         wake_time: draft.wake_time,
         sleep_quality: draft.sleep_quality,
         gym_intention: draft.gym_intention,
-        deep_work_target: draft.deep_work_target,
-        deep_work_start: draft.deep_work_start
+        deep_work_planned: draft.deep_work_planned,
+        deep_work_plan_note: draft.deep_work_planned === 'yes' && draft.deep_work_plan_note
+          ? draft.deep_work_plan_note
+          : null
       })
       setSaved(true)
     } catch (err) {
@@ -160,7 +162,7 @@ export default function Morning() {
           "in their recent daily journal. Be warm but honest, specific, and concrete — " +
           "no preamble, no greeting, no sign-off. Speak to the user directly. " +
           "If you notice a pattern (e.g. low sleep correlated with skipped gym, or " +
-          "deep work consistently undershooting target), name it gently. " +
+          "regularly missing deep work sessions), name it gently. " +
           "Only reference facts present in the data you're given; never fabricate " +
           "numbers, durations, or units.",
         prompt: buildNudgePrompt(recent, { date, ...draft })
@@ -339,28 +341,23 @@ function Question({
   return (
     <QuestionCard
       stepKey="focus"
-      question="How much deep work?"
-      hint="Set a target and when you'll start."
+      question="Deep work today?"
+      hint="Will you get a deep work session in?"
     >
-      <NumberStepper
-        ariaLabel="Deep work target in hours"
-        value={draft.deep_work_target}
-        onChange={(v) =>
-          setDraft({
-            ...draft,
-            deep_work_target: v,
-            deep_work_start: v === 0 ? null : draft.deep_work_start
-          })
-        }
-        min={0}
-        max={10}
-        step={0.5}
+      <PillGroup
+        ariaLabel="Deep work intention"
+        options={GYM_OPTIONS}
+        value={draft.deep_work_planned}
+        onChange={(v) => setDraft({ ...draft, deep_work_planned: v as DeepWorkPlanned })}
       />
-      {draft.deep_work_target > 0 && (
-        <TimeInput
-          ariaLabel="Planned start time"
-          value={draft.deep_work_start}
-          onChange={(v) => setDraft({ ...draft, deep_work_start: v })}
+      {draft.deep_work_planned === 'yes' && (
+        <input
+          type="text"
+          className="morning__planNote"
+          placeholder="How and when?"
+          value={draft.deep_work_plan_note}
+          onChange={(e) => setDraft({ ...draft, deep_work_plan_note: e.target.value })}
+          aria-label="Deep work plan note"
         />
       )}
     </QuestionCard>
@@ -378,9 +375,7 @@ function isValid(step: Step, d: DraftMorning): boolean {
     case 'gym':
       return d.gym_intention !== null
     case 'focus':
-      return d.deep_work_target === 0
-        ? true
-        : d.deep_work_target > 0 && !!d.deep_work_start
+      return d.deep_work_planned !== null
   }
 }
 
@@ -400,7 +395,7 @@ function buildNudgePrompt(
     dq: e.day_quality,
     gym_i: e.gym_intention,
     gym_a: e.gym_actual,
-    dw_t: e.deep_work_target,
+    dw_p: e.deep_work_planned,
     dw_a: e.deep_work_actual,
     soc: e.social,
     hrv: e.hrv_avg,
@@ -419,8 +414,8 @@ function buildNudgePrompt(
     "- dq: self-reported day quality, integer 1–5 stars (logged in the evening, so often null for today).",
     "- gym_i: morning intention for the gym — 'yes' | 'no'",
     "- gym_a: evening report of whether they actually went — 'yes' | 'no'",
-    "- dw_t: deep-work target in hours (decimal, e.g. 2.5)",
-    "- dw_a: deep-work actually completed in hours",
+    "- dw_p: morning intention for deep work — 'yes' | 'no'",
+    "- dw_a: deep-work actually completed in hours (logged in the evening)",
     "- soc: boolean — did they have meaningful social interaction that day",
     "- hrv: average heart rate variability in ms (passive, sparsely populated, often null)",
     "- rhr: resting heart rate in bpm (passive, sparsely populated, often null)",
@@ -440,8 +435,7 @@ function buildNudgePrompt(
       wake_time: today.wake_time,
       sleep_quality: today.sleep_quality,
       gym_intention: today.gym_intention,
-      deep_work_target: today.deep_work_target,
-      deep_work_start: today.deep_work_start
+      deep_work_planned: today.deep_work_planned
     }),
     "",
     "Write the nudge. Do not invent fields or units that are not in the schema. Only reference hours of sleep if `sleep_h` is non-null for the relevant day."

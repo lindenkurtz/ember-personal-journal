@@ -13,9 +13,11 @@ export interface Entry {
   day_quality: number | null // 1–5, evening self-report of the day overall
   gym_intention: GymChoice | null
   gym_actual: GymChoice | null
-  deep_work_target: number | null // hours
+  deep_work_target: number | null // hours (legacy, no longer written)
   deep_work_actual: number | null
-  deep_work_start: string | null // 'HH:MM'
+  deep_work_start: string | null // 'HH:MM' (legacy, no longer written)
+  deep_work_planned: 'yes' | 'no' | null
+  deep_work_plan_note: string | null
   social: boolean | null
   note: string | null
   hrv_avg: number | null
@@ -60,6 +62,16 @@ export async function getRange(n: number): Promise<Entry[]> {
     .select('*')
     .gte('date', keys[0])
     .lte('date', keys[keys.length - 1])
+    .order('date', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as Entry[]
+}
+
+/** Fetch all entries ever recorded (oldest first). Used for all-time best-streak calculation. */
+export async function getAllEntries(): Promise<Entry[]> {
+  const { data, error } = await supabase
+    .from('entries')
+    .select('*')
     .order('date', { ascending: true })
   if (error) throw error
   return (data ?? []) as Entry[]

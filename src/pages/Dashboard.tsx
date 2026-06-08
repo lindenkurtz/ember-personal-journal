@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, parseISO, format } from 'date-fns'
-import { Entry, getRange, getEntry } from '../lib/entries'
-import { gymStreak, restDaysLeft, deepWorkStreak } from '../lib/streaks'
+import { Entry, getRange, getEntry, getAllEntries } from '../lib/entries'
+import { gymStreak, restDaysLeft, deepWorkStreak, deepWorkRestDaysLeft, bestGymStreak, bestDeepWorkStreak } from '../lib/streaks'
 import { getSettings, PushSettings } from '../lib/settings'
 import { prettyDay, todayKey, dayKey } from '../lib/date'
 import StatCard from '../components/StatCard'
@@ -15,6 +15,7 @@ import './Dashboard.css'
 
 export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([])
+  const [allEntries, setAllEntries] = useState<Entry[]>([])
   const [today, setToday] = useState<Entry | null>(null)
   const [yesterday, setYesterday] = useState<Entry | null>(null)
   const [settings, setSettings] = useState<PushSettings | null>(null)
@@ -23,10 +24,11 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false
     const yKey = dayKey(subDays(new Date(), 1))
-    Promise.all([getRange(30), getEntry(todayKey()), getEntry(yKey), getSettings()])
-      .then(([range, t, y, s]) => {
+    Promise.all([getRange(30), getEntry(todayKey()), getEntry(yKey), getSettings(), getAllEntries()])
+      .then(([range, t, y, s, all]) => {
         if (cancelled) return
         setEntries(range)
+        setAllEntries(all)
         setToday(t)
         setYesterday(y)
         setSettings(s)
@@ -40,7 +42,12 @@ export default function Dashboard() {
   const history = settings?.rest_budget_history
   const gym = gymStreak(entries, restBudget, history)
   const restLeft = restDaysLeft(entries, restBudget, history)
-  const dw = deepWorkStreak(entries)
+  const dwBudget = settings?.deep_work_rest_budget ?? 2
+  const dwHistory = settings?.deep_work_rest_budget_history
+  const dw = deepWorkStreak(entries, dwBudget, dwHistory)
+  const dwRestLeft = deepWorkRestDaysLeft(entries, dwBudget, dwHistory)
+  const bestGym = bestGymStreak(allEntries, restBudget, history)
+  const bestDw = bestDeepWorkStreak(allEntries, dwBudget, dwHistory)
 
   const morningDone = isMorningDone(today)
   const eveningDone = isEveningDone(today)
@@ -83,7 +90,7 @@ export default function Dashboard() {
             )}
             <CheckInCard
               title={morningDone ? 'Morning check-in' : 'Morning check-in'}
-              summary={morningDone ? morningSummary(today!) : 'Bedtime, sleep, gym, deep work target.'}
+              summary={morningDone ? morningSummary(today!) : 'Bedtime, sleep, gym, deep work plan.'}
               status={morningDone ? 'done' : 'pending'}
               variant={morningDone ? 'default' : 'cta'}
               to="/morning"
@@ -104,12 +111,16 @@ export default function Dashboard() {
               sublabel={restLeft === 0
                 ? 'budget reached this week'
                 : `${restLeft} rest ${restLeft === 1 ? 'day' : 'days'} left this week`}
+              best={bestGym > 0 ? bestGym : undefined}
               variant="glow"
             />
             <StatCard
               label="Deep work streak"
               value={<><span className="dash__num">{dw}</span> <span className="dash__unit">{dw === 1 ? 'day' : 'days'}</span></>}
-              sublabel="hit your daily target"
+              sublabel={dwRestLeft === 0
+                ? 'budget reached this week'
+                : `${dwRestLeft} rest ${dwRestLeft === 1 ? 'day' : 'days'} left this week`}
+              best={bestDw > 0 ? bestDw : undefined}
             />
           </section>
 
@@ -128,7 +139,7 @@ export default function Dashboard() {
           <section className="dash__card">
             <div className="dash__cardHeader">
               <h2>Deep work this week</h2>
-              <span className="muted">hours, target vs actual</span>
+              <span className="muted">hours logged</span>
             </div>
             <DeepWorkBarChart entries={entries} />
           </section>
@@ -154,7 +165,7 @@ export default function Dashboard() {
 }
 
 function isMorningDone(e: Entry | null): boolean {
-  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null
+  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null && e.deep_work_planned !== null
 }
 
 function isEveningDone(e: Entry | null): boolean {
@@ -165,8 +176,8 @@ function morningSummary(e: Entry): string {
   const parts: string[] = []
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
   if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
-  if (e.deep_work_target !== null && e.deep_work_target !== undefined)
-    parts.push(`${e.deep_work_target}h target`)
+  if (e.deep_work_planned === 'yes') parts.push('deep work yes')
+  else if (e.deep_work_planned === 'no') parts.push('deep work no')
   return parts.join(' · ')
 }
 

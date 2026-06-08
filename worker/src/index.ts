@@ -28,6 +28,8 @@ interface Entry {
   sleep_quality: number | null
   gym_actual: string | null
   deep_work_actual: number | null
+  deep_work_planned: string | null
+  deep_work_plan_note: string | null
   weather_temp_f: number | null
 }
 

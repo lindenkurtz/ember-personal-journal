@@ -23,7 +23,7 @@ export default function Settings() {
       })
       .catch((e) => {
         console.error('[settings]', e)
-        if (!cancelled) setError('Couldn’t load settings.')
+        if (!cancelled) setError("Couldn't load settings.")
       })
     return () => { cancelled = true }
   }, [])
@@ -58,7 +58,7 @@ export default function Settings() {
       setSettings(saved)
     } catch (e) {
       console.error('[settings] save', e)
-      setError('Couldn’t save — try again.')
+      setError("Couldn't save — try again.")
     } finally {
       setStatus('idle')
     }
@@ -70,16 +70,16 @@ export default function Settings() {
     if (clamped === settings.rest_days_per_week) return
     const optimistic = { ...settings, rest_days_per_week: clamped }
     setSettings(optimistic)
-    setStatus(‘saving’)
+    setStatus('saving')
     setError(null)
     try {
       const saved = await setRestBudget(settings, clamped)
       setSettings(saved)
     } catch (e) {
-      console.error(‘[settings] rest budget’, e)
-      setError(‘Couldn’t save — try again.’)
+      console.error('[settings] rest budget', e)
+      setError("Couldn't save — try again.")
     } finally {
-      setStatus(‘idle’)
+      setStatus('idle')
     }
   }
 
@@ -89,16 +89,16 @@ export default function Settings() {
     if (clamped === settings.deep_work_rest_budget) return
     const optimistic = { ...settings, deep_work_rest_budget: clamped }
     setSettings(optimistic)
-    setStatus(‘saving’)
+    setStatus('saving')
     setError(null)
     try {
       const saved = await setDeepWorkRestBudget(settings, clamped)
       setSettings(saved)
     } catch (e) {
-      console.error(‘[settings] deep work rest budget’, e)
-      setError(‘Couldn’t save — try again.’)
+      console.error('[settings] deep work rest budget', e)
+      setError("Couldn't save — try again.")
     } finally {
-      setStatus(‘idle’)
+      setStatus('idle')
     }
   }
 
@@ -115,7 +115,7 @@ export default function Settings() {
             <h2 className="settings__rowTitle">Daily reminders</h2>
             <p className="settings__rowHint">
               A push notification at your morning and evening times, but only if
-              that check-in hasn’t been filled yet.
+              that check-in hasn't been filled yet.
             </p>
           </div>
           <Toggle
@@ -255,7 +255,7 @@ function LocationSection({
 
   function detect() {
     if (!('geolocation' in navigator)) {
-      setDetectError('Geolocation isn’t available in this browser.')
+      setDetectError("Geolocation isn't available in this browser.")
       return
     }
     setDetectError(null)
@@ -269,7 +269,7 @@ function LocationSection({
         setDetecting(false)
       },
       () => {
-        setDetectError('Couldn’t detect location — check your browser permissions.')
+        setDetectError("Couldn't detect location — check your browser permissions.")
         setDetecting(false)
       },
       { timeout: 10000 }
@@ -358,13 +358,13 @@ function SupportBanner({ reason }: { reason: 'no-api' | 'not-installed' | 'no-va
   if (reason === 'no-vapid') {
     return (
       <p className="settings__banner">
-        Push isn’t configured yet — the VAPID public key is missing.
+        Push isn't configured yet — the VAPID public key is missing.
       </p>
     )
   }
   return (
     <p className="settings__banner">
-      This browser doesn’t support web push. Try Safari on iOS 16.4+ or a recent
+      This browser doesn't support web push. Try Safari on iOS 16.4+ or a recent
       Chrome/Edge.
     </p>
   )

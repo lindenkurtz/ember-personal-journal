@@ -9,6 +9,7 @@ export interface ClaudeRequest {
   system?: string
   stream?: boolean
   max_tokens?: number
+  images?: { media_type: string; data: string }[]
 }
 
 /** Non-streaming call. Returns the model's plain text reply. */

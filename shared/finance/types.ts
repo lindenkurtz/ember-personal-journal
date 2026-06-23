@@ -17,6 +17,8 @@ export type Category =
 
 export type FinanceSource = 'plaid' | 'csv' | 'manual'
 
+export type SavingsBucket = 'short_term' | 'long_term' | 'retirement'
+
 export interface FinanceAccount {
   account_id: string
   item_id: string | null
@@ -45,6 +47,10 @@ export interface FinanceTransaction {
   is_transfer: boolean
   is_split: boolean
   split_amount: number | null
+  // Labels a transfer as a savings/retirement contribution so it feeds the
+  // savings-rate panel. Independent of is_transfer (a savings move is still a
+  // transfer for cash-flow purposes). null = not a savings contribution.
+  savings_bucket: SavingsBucket | null
   flagged_for_review: boolean
   reviewed: boolean
   source: FinanceSource

@@ -15,7 +15,14 @@ interface ChatBody {
   system?: string
   stream?: boolean
   max_tokens?: number
+  // Optional base64 images for vision (e.g. parsing a screenshot of a
+  // transaction list). Sonnet 4.6 downscales each to ~1600 tokens max.
+  images?: { media_type: string; data: string }[]
 }
+
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
 
 const MODEL = 'claude-sonnet-4-6'
 
@@ -33,6 +40,16 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     }
 
     const stream = !!body.stream
+    // Plain string content unless images are attached, in which case build a
+    // content-block array (images first, then the text prompt).
+    const content: string | ContentBlock[] = body.images?.length
+      ? [
+          ...body.images.map(
+            (img): ContentBlock => ({ type: 'image', source: { type: 'base64', media_type: img.media_type, data: img.data } })
+          ),
+          { type: 'text', text: body.prompt }
+        ]
+      : body.prompt
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -45,7 +62,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
         max_tokens: body.max_tokens ?? 256,
         system: body.system,
         stream,
-        messages: [{ role: 'user', content: body.prompt }]
+        messages: [{ role: 'user', content }]
       })
     })
 

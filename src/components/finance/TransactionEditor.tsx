@@ -1,8 +1,14 @@
 import { useState } from 'react'
-import type { Category, FinanceTransaction } from '../../../shared/finance/types'
+import type { Category, FinanceTransaction, SavingsBucket } from '../../../shared/finance/types'
 import { CATEGORIES, CATEGORY_LABELS } from '../../../shared/finance/categories'
 import type { TransactionPatch } from '../../lib/finance/transactions'
 import { money } from '../../lib/finance/format'
+
+const SAVINGS_LABELS: Record<SavingsBucket, string> = {
+  short_term: 'Short-term (Emergency)',
+  long_term: 'Long-term (Investments)',
+  retirement: 'Retirement (Roth IRA)'
+}
 
 interface Props {
   txn: FinanceTransaction
@@ -18,6 +24,7 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
   const [isTransfer, setIsTransfer] = useState(txn.is_transfer)
   const [isSplit, setIsSplit] = useState(txn.is_split)
   const [splitAmount, setSplitAmount] = useState(txn.split_amount?.toString() ?? '')
+  const [savingsBucket, setSavingsBucket] = useState<SavingsBucket | ''>(txn.savings_bucket ?? '')
   const [reviewed, setReviewed] = useState(txn.reviewed)
   const [saving, setSaving] = useState(false)
 
@@ -31,6 +38,7 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
         is_transfer: isTransfer,
         is_split: isSplit,
         split_amount: isSplit && splitAmount ? parseFloat(splitAmount) : null,
+        savings_bucket: savingsBucket || null,
         reviewed,
         flagged_for_review: txn.flagged_for_review && !reviewed
       })
@@ -80,6 +88,16 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
             <input type="number" inputMode="decimal" value={splitAmount} onChange={(e) => setSplitAmount(e.target.value)} placeholder="0.00" />
           </label>
         )}
+
+        <label className="finance__field">
+          <span>Savings contribution</span>
+          <select value={savingsBucket} onChange={(e) => setSavingsBucket(e.target.value as SavingsBucket | '')}>
+            <option value="">Not savings</option>
+            {(Object.keys(SAVINGS_LABELS) as SavingsBucket[]).map((b) => (
+              <option key={b} value={b}>{SAVINGS_LABELS[b]}</option>
+            ))}
+          </select>
+        </label>
 
         <label className="finance__check">
           <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />

@@ -54,6 +54,11 @@ export default function MonthlySummary({ monthLabel, flow, prior, savings, subsT
           <span className="finance__tileNum">{money(savings.longTerm)}</span>
           <span className="finance__tileSub">{percent(savings.longTermRate)} of income</span>
         </div>
+        <div className="finance__tile">
+          <span className="finance__tileLabel">Retirement</span>
+          <span className="finance__tileNum">{money(savings.retirement)}</span>
+          <span className="finance__tileSub">{percent(savings.retirementRate)} of income</span>
+        </div>
       </div>
     </section>
   )

@@ -4,26 +4,10 @@
  * "Apple Card Transactions" export and writes rows under a synthetic, net-worth-
  * excluded account. Re-importing the same file is a no-op (deterministic ids).
  */
-import type { Category, FinanceAccount, FinanceTransaction } from '../../../shared/finance/types'
-import { ensureLocalAccount } from './accounts'
+import type { Category, FinanceTransaction } from '../../../shared/finance/types'
 import { insertTransactions } from './transactions'
-
-export const APPLE_CARD_ACCOUNT_ID = 'csv-apple-card'
-
-const APPLE_CARD_ACCOUNT: FinanceAccount = {
-  account_id: APPLE_CARD_ACCOUNT_ID,
-  item_id: null,
-  name: 'Apple Card',
-  official_name: 'Apple Card (CSV import)',
-  institution_name: 'Apple Card',
-  type: 'credit',
-  subtype: 'credit card',
-  mask: null,
-  is_asset: false,
-  include_in_net_worth: false, // a participant on mom's account — balance is misleading
-  source: 'csv',
-  last_synced_at: null
-}
+import { contentHash } from './hash'
+import { APPLE_CARD_ACCOUNT_ID, ensureLocal } from './localAccounts'
 
 // Apple Card's own category column → our schema. Apple's set is small and stable.
 const APPLE_CATEGORY_MAP: Record<string, Category> = {
@@ -72,17 +56,6 @@ function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim())
 }
 
-// FNV-1a → hex. Stable across imports so duplicate rows collide on the same id.
-function hashId(parts: string[]): string {
-  let h = 0x811c9dc5
-  const s = parts.join('|')
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return 'csv-' + (h >>> 0).toString(16)
-}
-
 function toIsoDate(raw: string): string | null {
   // Apple exports MM/DD/YYYY.
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
@@ -123,7 +96,7 @@ export function parseAppleCardCsv(text: string): FinanceTransaction[] {
       ? 'transfer'
       : APPLE_CATEGORY_MAP[parsed.category.toLowerCase()] ?? 'shopping'
     rows.push({
-      id: hashId([parsed.date, String(parsed.amount), parsed.description, parsed.merchant]),
+      id: 'csv-' + contentHash([parsed.date, parsed.amount, parsed.description, parsed.merchant]),
       account_id: APPLE_CARD_ACCOUNT_ID,
       date: parsed.date,
       amount,
@@ -135,6 +108,7 @@ export function parseAppleCardCsv(text: string): FinanceTransaction[] {
       is_transfer: isPayment,
       is_split: false,
       split_amount: null,
+      savings_bucket: null,
       flagged_for_review: false,
       reviewed: true,
       source: 'csv',
@@ -148,7 +122,7 @@ export async function importAppleCardCsv(file: File): Promise<{ parsed: number; 
   const text = await file.text()
   const rows = parseAppleCardCsv(text)
   if (!rows.length) return { parsed: 0, inserted: 0 }
-  await ensureLocalAccount(APPLE_CARD_ACCOUNT)
+  await ensureLocal(APPLE_CARD_ACCOUNT_ID)
   const inserted = await insertTransactions(rows)
   return { parsed: rows.length, inserted }
 }

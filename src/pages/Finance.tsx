@@ -5,13 +5,16 @@ import { getAccounts, updateAccount } from '../lib/finance/accounts'
 import { getLatestBalances, getNetWorthSnapshots } from '../lib/finance/balances'
 import { getFinanceSettings, updateFinanceSettings } from '../lib/finance/settings'
 import { getLatestLoan, setManualLoan } from '../lib/finance/loans'
-import { getTransactionsRange, getReviewQueue, updateTransaction, deleteTransaction, TransactionPatch } from '../lib/finance/transactions'
+import { getTransactionsRange, getReviewQueue, updateTransaction, deleteTransaction, insertTransactions, TransactionPatch } from '../lib/finance/transactions'
 import { runPlaidSync } from '../lib/finance/plaid'
 import { importAppleCardCsv } from '../lib/finance/csv'
+import { extractTransactions } from '../lib/finance/extract'
+import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
 import { cashFlow, categoryBreakdown, savingsRates, subscriptionsTotal } from '../lib/finance/analytics'
 import { monthKey, monthRange, prevMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
 import PlaidLinkButton from '../components/finance/PlaidLinkButton'
+import ImportReview from '../components/finance/ImportReview'
 import NetWorthChart from '../components/finance/NetWorthChart'
 import CashFlowChart from '../components/finance/CashFlowChart'
 import CategoryBreakdown from '../components/finance/CategoryBreakdown'
@@ -33,7 +36,11 @@ export default function Finance() {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [editing, setEditing] = useState<FinanceTransaction | null>(null)
+  const [candidates, setCandidates] = useState<FinanceTransaction[] | null>(null)
+  const [shotAccount, setShotAccount] = useState(LOCAL_ACCOUNTS[0].account_id)
+  const [importing, setImporting] = useState(false)
   const csvInput = useRef<HTMLInputElement>(null)
+  const shotInput = useRef<HTMLInputElement>(null)
 
   const month = monthKey()
   const startMonth = prevMonthKey(prevMonthKey(prevMonthKey(month)))
@@ -86,7 +93,7 @@ export default function Finance() {
   const priorFlow = cashFlow(priorTxns)
   const breakdown = categoryBreakdown(monthTxns)
   const subs = subscriptionsTotal(monthTxns)
-  const savings = savingsRates(monthTxns, accounts, flow.income)
+  const savings = savingsRates(monthTxns, flow.income)
 
   // 3-month rolling average per category over the three months before this one.
   const averages = useMemo(() => {
@@ -130,6 +137,32 @@ export default function Finance() {
     } finally {
       if (csvInput.current) csvInput.current.value = ''
     }
+  }
+
+  async function handleScreenshot(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setImporting(true)
+    setSyncMsg(null)
+    try {
+      const account = LOCAL_ACCOUNTS.find((a) => a.account_id === shotAccount)!
+      const rows = await extractTransactions(files, account)
+      if (!rows.length) setSyncMsg('No transactions found in that screenshot.')
+      else setCandidates(rows)
+    } catch (err) {
+      setSyncMsg(`Screenshot read failed: ${err}`)
+    } finally {
+      setImporting(false)
+      if (shotInput.current) shotInput.current.value = ''
+    }
+  }
+
+  async function handleConfirmImport(rows: FinanceTransaction[]) {
+    await ensureLocal(shotAccount)
+    const n = await insertTransactions(rows)
+    setSyncMsg(`Imported ${n} of ${rows.length} transactions`)
+    setCandidates(null)
+    await load()
   }
 
   async function handleSave(patch: TransactionPatch) {
@@ -189,6 +222,15 @@ export default function Finance() {
         <PlaidLinkButton onLinked={load} />
         <button className="finance__ghostBtn" onClick={() => csvInput.current?.click()}>Import Apple Card CSV</button>
         <input ref={csvInput} type="file" accept=".csv" hidden onChange={handleCsv} />
+        <span className="finance__shot">
+          <select className="finance__sel" value={shotAccount} onChange={(e) => setShotAccount(e.target.value)}>
+            {LOCAL_ACCOUNTS.map((a) => <option key={a.account_id} value={a.account_id}>{a.name}</option>)}
+          </select>
+          <button className="finance__ghostBtn" onClick={() => shotInput.current?.click()} disabled={importing}>
+            {importing ? 'Reading…' : 'Add from screenshot'}
+          </button>
+          <input ref={shotInput} type="file" accept="image/*" multiple hidden onChange={handleScreenshot} />
+        </span>
         {settings?.last_full_sync_date && <span className="finance__synced">last sync {settings.last_full_sync_date}</span>}
       </section>
       {syncMsg && <p className="finance__syncMsg">{syncMsg}</p>}
@@ -276,6 +318,14 @@ export default function Finance() {
           onSave={handleSave}
           onClose={() => setEditing(null)}
           onDelete={handleDelete}
+        />
+      )}
+
+      {candidates && (
+        <ImportReview
+          candidates={candidates}
+          onConfirm={handleConfirmImport}
+          onClose={() => setCandidates(null)}
         />
       )}
     </main>

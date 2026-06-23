@@ -1,4 +1,4 @@
-import type { Category, FinanceAccount, FinanceTransaction } from '../../../shared/finance/types'
+import type { Category, FinanceTransaction } from '../../../shared/finance/types'
 
 // Transfers and income are never "spending". Peer payments still count toward
 // spending once reviewed (the user recategorizes splits during review).
@@ -46,43 +46,37 @@ export function subscriptionsTotal(txns: FinanceTransaction[]): number {
     .reduce((sum, t) => sum + -t.amount, 0)
 }
 
-function accountIdsMatching(accounts: FinanceAccount[], ...needles: string[]): Set<string> {
-  const ids = new Set<string>()
-  for (const a of accounts) {
-    const hay = `${a.institution_name ?? ''} ${a.official_name ?? ''} ${a.name}`.toLowerCase()
-    if (needles.some((n) => hay.includes(n))) ids.add(a.account_id)
-  }
-  return ids
-}
-
 export interface SavingsRates {
-  shortTerm: number // into Brokerage Emergency
-  longTerm: number // into Brokerage Savings/Investments
+  shortTerm: number // Brokerage Emergency
+  longTerm: number // Brokerage Savings/Investments
+  retirement: number // Brokerage Roth IRA
   shortTermRate: number | null
   longTermRate: number | null
+  retirementRate: number | null
 }
 
 /**
- * Two separate savings figures — deliberately NOT smoothed. Internship summers
- * vs school months swing hard and that swing is the signal. Inflows are detected
- * as positive-amount transactions landing on the matched savings accounts.
+ * Three separate savings figures — deliberately NOT smoothed. Internship summers
+ * vs school months swing hard and that swing is the signal. Each contribution is
+ * read off the transaction's `savings_bucket` label (auto-set when money lands in
+ * a matched Brokerage account, or set manually on the source-side transfer), so a
+ * given transfer is counted once regardless of which side is connected.
  */
-export function savingsRates(txns: FinanceTransaction[], accounts: FinanceAccount[], income: number): SavingsRates {
-  // Emergency is matched first; the loop's else-if lets it win when an account
-  // name contains both "savings" and "emergency".
-  const shortIds = accountIdsMatching(accounts, 'emergency')
-  const longIds = accountIdsMatching(accounts, 'investment', 'savings', 'long-term', 'long term')
+export function savingsRates(txns: FinanceTransaction[], income: number): SavingsRates {
   let shortTerm = 0
   let longTerm = 0
+  let retirement = 0
   for (const t of txns) {
-    if (t.amount <= 0 || !t.account_id) continue
-    if (shortIds.has(t.account_id)) shortTerm += t.amount
-    else if (longIds.has(t.account_id)) longTerm += t.amount
+    if (t.savings_bucket === 'short_term') shortTerm += Math.abs(t.amount)
+    else if (t.savings_bucket === 'long_term') longTerm += Math.abs(t.amount)
+    else if (t.savings_bucket === 'retirement') retirement += Math.abs(t.amount)
   }
   return {
     shortTerm,
     longTerm,
+    retirement,
     shortTermRate: income > 0 ? shortTerm / income : null,
-    longTermRate: income > 0 ? longTerm / income : null
+    longTermRate: income > 0 ? longTerm / income : null,
+    retirementRate: income > 0 ? retirement / income : null
   }
 }

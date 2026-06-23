@@ -66,6 +66,7 @@ create table if not exists finance_transactions (
   is_transfer boolean not null default false,
   is_split boolean not null default false,
   split_amount numeric,
+  savings_bucket text, -- 'short_term' | 'long_term' | 'retirement' | null
   flagged_for_review boolean not null default false,
   reviewed boolean not null default false,
   source text not null default 'plaid',
@@ -81,6 +82,8 @@ create policy "anon read txns"   on finance_transactions for select to anon usin
 create policy "anon insert txns" on finance_transactions for insert to anon with check (true);
 create policy "anon update txns" on finance_transactions for update to anon using (true) with check (true);
 create policy "anon delete txns" on finance_transactions for delete to anon using (true);
+-- Idempotent: adds the savings bucket to an already-created table on re-run.
+alter table finance_transactions add column if not exists savings_bucket text;
 
 -- ---------------------------------------------------------------------------
 -- finance_balances — one row per account per sync day (per-account history).

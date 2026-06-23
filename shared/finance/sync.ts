@@ -184,7 +184,7 @@ async function upsertTransactions(
   const ids = incoming.map((t) => t.transaction_id)
   const { data: existingRows } = await supabase
     .from('finance_transactions')
-    .select('id, category, notes, is_transfer, is_split, split_amount, flagged_for_review, reviewed')
+    .select('id, category, notes, is_transfer, is_split, split_amount, savings_bucket, flagged_for_review, reviewed')
     .in('id', ids)
   const existing = new Map<string, any>()
   for (const r of (existingRows ?? []) as any[]) existing.set(r.id, r)
@@ -212,6 +212,7 @@ async function upsertTransactions(
         is_transfer: prior.is_transfer,
         is_split: prior.is_split,
         split_amount: prior.split_amount,
+        savings_bucket: prior.savings_bucket,
         flagged_for_review: prior.flagged_for_review,
         reviewed: true
       }
@@ -234,6 +235,7 @@ async function upsertTransactions(
       is_transfer: c.is_transfer,
       is_split: false,
       split_amount: null,
+      savings_bucket: c.savings_bucket,
       flagged_for_review: c.flagged_for_review,
       reviewed: c.reviewed
     }

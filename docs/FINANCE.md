@@ -65,6 +65,18 @@ npx wrangler secret put PLAID_ENV
 - **Apple Card** is CSV-first ([src/lib/finance/csv.ts](../src/lib/finance/csv.ts)),
   excluded from net worth. Import via the page's "Import Apple Card CSV" button;
   re-importing the same export is a no-op (deterministic ids).
+- **Apple Card / Apple Cash via screenshot** ([src/lib/finance/extract.ts](../src/lib/finance/extract.ts)):
+  pick the account, upload screenshots of the Wallet/card.apple.com transaction
+  list, and Claude (through the `/api/claude` vision proxy) returns rows tagged
+  with our categories. You review them, then confirm to insert (same content-hash
+  dedup). Cost is ~2¢/screenshot on Sonnet 4.6. The screenshot image is sent to
+  the Anthropic API via your own proxy.
+- **Savings rates** are read off each transaction's `savings_bucket`
+  (`short_term` = Brokerage Emergency, `long_term` = Investments/Savings,
+  `retirement` = Roth IRA). It auto-sets when money lands in a matched Brokerage
+  account; if those accounts aren't connected, label the Bank-outflow
+  transfer manually in the transaction editor. One label per transfer, so it's
+  never double-counted.
 
 ## Testing (Sandbox)
 

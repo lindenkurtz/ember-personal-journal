@@ -17,5 +17,5 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src", "../shared"]
 }

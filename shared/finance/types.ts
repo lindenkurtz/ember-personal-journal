@@ -1,0 +1,92 @@
+// Runtime-agnostic finance types, shared by the SPA, the Pages Function, and
+// the cron Worker. Keep this file free of DOM- and Workers-only globals so all
+// three TypeScript projects can compile it.
+
+export type Category =
+  | 'income'
+  | 'transfer'
+  | 'housing'
+  | 'groceries'
+  | 'dining'
+  | 'subscriptions'
+  | 'health'
+  | 'transportation'
+  | 'school_work'
+  | 'shopping'
+  | 'peer_payment'
+
+export type FinanceSource = 'plaid' | 'csv' | 'manual'
+
+export interface FinanceAccount {
+  account_id: string
+  item_id: string | null
+  name: string
+  official_name: string | null
+  institution_name: string | null
+  type: string | null
+  subtype: string | null
+  mask: string | null
+  is_asset: boolean
+  include_in_net_worth: boolean
+  source: FinanceSource
+  last_synced_at: string | null
+}
+
+export interface FinanceTransaction {
+  id: string
+  account_id: string | null
+  date: string // YYYY-MM-DD
+  amount: number // inflow positive, outflow negative
+  merchant_name: string | null
+  name: string | null
+  plaid_category: string | null
+  category: Category
+  notes: string | null
+  is_transfer: boolean
+  is_split: boolean
+  split_amount: number | null
+  flagged_for_review: boolean
+  reviewed: boolean
+  source: FinanceSource
+  pending: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface FinanceBalance {
+  account_id: string
+  as_of: string
+  balance: number
+}
+
+export interface NetWorthSnapshot {
+  as_of: string
+  net_worth: number
+  assets_total: number
+  liabilities_total: number
+}
+
+export interface LoanBalance {
+  as_of: string
+  servicer: string
+  balance: number
+  source: FinanceSource
+}
+
+export interface FinanceSettings {
+  id: number
+  plaid_env: string
+  cc_payment_payee: string | null
+  wf_buffer_target: number
+  secondary_buffer_target: number
+  last_full_sync_date: string | null
+}
+
+export interface SyncSummary {
+  accounts: number
+  added: number
+  modified: number
+  removed: number
+  net_worth: number | null
+  errors: string[]
+}

@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { sendPush, PushSubscription, VapidKeys } from './webpush'
+import { runSync } from '../../shared/finance/sync'
 
 export interface Env {
   VAPID_PUBLIC_KEY: string
@@ -7,9 +8,13 @@ export interface Env {
   VAPID_SUBJECT: string
   SUPABASE_URL: string
   SUPABASE_KEY: string
+  // Optional — finance sync is skipped when Plaid isn't configured.
+  PLAID_CLIENT_ID?: string
+  PLAID_SECRET?: string
+  PLAID_ENV?: string
 }
 
-type Slot = 'morning' | 'evening'
+type Slot = 'morning' | 'evening' | 'finance'
 
 interface Settings {
   enabled: boolean
@@ -35,13 +40,19 @@ interface Entry {
 
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Push ticks every 5 min; the finance sync self-dedupes to once per local day.
     ctx.waitUntil(tick(env))
+    ctx.waitUntil(financeTick(env).catch((err) => console.error('[finance] error', err)))
   },
-  // Manual trigger for testing: `curl https://<worker>/?force=morning`
+  // Manual trigger for testing: `curl https://<worker>/?force=morning|finance`
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
     const force = url.searchParams.get('force') as Slot | null
     try {
+      if (force === 'finance') {
+        const summary = await financeTick(env, true)
+        return Response.json(summary ?? { skipped: true })
+      }
       await tick(env, force)
       return new Response('ok', { status: 200 })
     } catch (err) {
@@ -49,6 +60,40 @@ export default {
       return new Response(String(err), { status: 500 })
     }
   }
+}
+
+// Daily full Plaid sync. Runs at most once per local day (deduped via
+// finance_settings.last_full_sync_date) and shares the exact orchestration the
+// "Sync now" Pages Function uses. Skipped entirely when Plaid isn't configured.
+async function financeTick(env: Env, force = false): Promise<unknown | null> {
+  if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) return null
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, { auth: { persistSession: false } })
+
+  const { data: fs } = await supabase
+    .from('finance_settings')
+    .select('last_full_sync_date')
+    .eq('id', 1)
+    .maybeSingle()
+  const { data: ps } = await supabase
+    .from('push_settings')
+    .select('timezone')
+    .eq('id', 1)
+    .maybeSingle()
+  const tz = (ps as { timezone: string } | null)?.timezone ?? 'America/Denver'
+  const { dateKey } = localNow(tz)
+
+  if (!force && (fs as { last_full_sync_date: string | null } | null)?.last_full_sync_date === dateKey) return null
+
+  return runSync(
+    {
+      PLAID_CLIENT_ID: env.PLAID_CLIENT_ID,
+      PLAID_SECRET: env.PLAID_SECRET,
+      PLAID_ENV: env.PLAID_ENV ?? 'sandbox',
+      SUPABASE_URL: env.SUPABASE_URL,
+      SUPABASE_KEY: env.SUPABASE_KEY
+    },
+    dateKey
+  )
 }
 
 async function tick(env: Env, force?: Slot | null): Promise<void> {

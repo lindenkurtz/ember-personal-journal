@@ -14,4 +14,7 @@ crons = ["*/5 * * * *"]
 #   VAPID_PRIVATE_KEY   — base64url
 #   VAPID_SUBJECT       — e.g. mailto:you@example.com
 #   SUPABASE_URL
-#   SUPABASE_KEY        — anon is fine for a single-user, RLS-less project
+#   SUPABASE_KEY        — the sb_secret_ key (bypasses RLS; needed for finance + push tables)
+#   PLAID_CLIENT_ID     — optional; the daily finance sync is skipped without it
+#   PLAID_SECRET        — optional
+#   PLAID_ENV           — 'sandbox' | 'production' (defaults to sandbox)

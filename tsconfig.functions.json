@@ -15,5 +15,5 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.functions.tsbuildinfo"
   },
-  "include": ["functions"]
+  "include": ["functions", "shared"]
 }

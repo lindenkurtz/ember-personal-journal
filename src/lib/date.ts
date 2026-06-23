@@ -25,3 +25,27 @@ export function prettyDay(d: Date = new Date()): string {
 export function weekStartKey(dateKey: string): string {
   return dayKey(startOfWeek(parseISO(dateKey), { weekStartsOn: 1 }))
 }
+
+/** Year-month key (YYYY-MM) for a YYYY-MM-DD, or for "now" with no arg. */
+export function monthKey(dateKey: string = todayKey()): string {
+  return dateKey.slice(0, 7)
+}
+
+/** First and last ISO date keys of a YYYY-MM month. */
+export function monthRange(month: string): { start: string; end: string } {
+  const [y, m] = month.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, '0')}` }
+}
+
+/** The YYYY-MM key for the month before `month`. */
+export function prevMonthKey(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Human label like "June 2026" for a YYYY-MM key. */
+export function prettyMonth(month: string): string {
+  return format(parseISO(`${month}-01`), 'MMMM yyyy')
+}

@@ -43,7 +43,11 @@ export default function PlaidLinkButton({ onLinked }: Props) {
     setBusy(true)
     setError(null)
     try {
-      const t = await createPlaidLinkToken(`${window.location.origin}/finance`)
+      // redirect_uri must be pre-registered in the Plaid dashboard and is only
+      // needed for OAuth banks. Skip it on localhost so Sandbox testing works
+      // without dashboard config.
+      const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)
+      const t = await createPlaidLinkToken(isLocal ? undefined : `${window.location.origin}/finance`)
       if (!t) throw new Error('no link token (Plaid not configured?)')
       setToken(t)
     } catch (e) {
@@ -55,7 +59,7 @@ export default function PlaidLinkButton({ onLinked }: Props) {
   return (
     <div className="finance__connect">
       <button className="finance__btn" onClick={start} disabled={busy}>
-        {busy ? 'Connecting…' : '+ Connect account'}
+        {busy ? 'Connecting…' : 'Connect account'}
       </button>
       {error && <span className="finance__error">{error}</span>}
     </div>

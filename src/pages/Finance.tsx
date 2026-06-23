@@ -179,7 +179,7 @@ export default function Finance() {
             {latestSnapshot && <> · {money(latestSnapshot.assets_total)} assets − {money(latestSnapshot.liabilities_total)} debt</>}
           </p>
         </div>
-        <Link to="/" className="finance__back">← Home</Link>
+        <Link to="/" className="finance__back">Home</Link>
       </header>
 
       <section className="finance__bar">

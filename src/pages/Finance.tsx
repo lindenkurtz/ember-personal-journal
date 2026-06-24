@@ -10,7 +10,7 @@ import { getRules, createRule, deleteRule, NewRule } from '../lib/finance/rules'
 import { runPlaidSync } from '../lib/finance/plaid'
 import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
-import { cashFlow, categoryBreakdown, savingsRates, subscriptionsTotal } from '../lib/finance/analytics'
+import { cashFlow, categoryBreakdown, savingsRates } from '../lib/finance/analytics'
 import { CATEGORY_LABELS } from '../../shared/finance/categories'
 import { monthKey, monthRange, prevMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
@@ -103,8 +103,10 @@ export default function Finance() {
   const flow = cashFlow(monthTxns)
   const priorFlow = cashFlow(priorTxns)
   const breakdown = categoryBreakdown(monthTxns)
-  const subs = subscriptionsTotal(monthTxns)
   const savings = savingsRates(monthTxns, flow.income)
+  const subItems = monthTxns
+    .filter((t) => t.category === 'subscriptions' && t.amount < 0)
+    .map((t) => ({ name: t.merchant_name ?? t.name ?? 'Subscription', amount: t.amount }))
 
   // 3-month rolling average per category over the three months before this one.
   const averages = useMemo(() => {
@@ -248,7 +250,7 @@ export default function Finance() {
             flow={flow}
             prior={priorFlow}
             savings={savings}
-            subsTotal={subs}
+            subItems={subItems}
             pendingReview={review.length}
           />
 
@@ -260,8 +262,8 @@ export default function Finance() {
           </section>
 
           <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Cash flow</h2><span className="muted">{prettyMonth(month)} · transfers excluded</span></div>
-            <CashFlowChart flow={flow} />
+            <div className="dash__cardHeader"><h2>Cash flow</h2><span className="muted">{prettyMonth(month)} · spending + savings</span></div>
+            <CashFlowChart flow={flow} savings={savings} />
           </section>
 
           <section className="dash__card">

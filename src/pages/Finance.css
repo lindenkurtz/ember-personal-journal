@@ -134,6 +134,23 @@
 .finance__tileLabel { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 .finance__tileNum { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .finance__tileSub { color: var(--muted); font-size: 11px; }
+.finance__netHint { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+/* Expandable subscriptions tile */
+.finance__tile--btn { text-align: left; border: none; cursor: pointer; font: inherit; color: inherit; align-items: stretch; }
+.finance__tile--btn:disabled { cursor: default; }
+.finance__tile--btn.is-open { outline: 1px solid var(--hairline); }
+.finance__subList {
+  margin-top: 10px; display: flex; flex-direction: column;
+  background: var(--card-soft); border-radius: var(--radius-sm); padding: 4px 12px;
+}
+.finance__subRow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+.finance__subRow:last-child { border-bottom: none; }
+.finance__subName { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finance__subAmt { font-size: 13px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+/* Cash-flow chart legend */
+.finance__chartLegend { display: flex; justify-content: center; gap: 16px; margin-top: 6px; color: var(--muted); font-size: 12px; }
 
 /* Category breakdown */
 .finance__cats { display: flex; flex-direction: column; gap: 14px; }

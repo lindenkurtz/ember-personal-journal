@@ -27,10 +27,10 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
   const [isTransfer, setIsTransfer] = useState(txn.is_transfer)
   const [savingsBucket, setSavingsBucket] = useState<SavingsBucket | ''>(txn.savings_bucket ?? '')
   const [makeRule, setMakeRule] = useState(false)
+  const [ruleMatch, setRuleMatch] = useState(txn.merchant_name ?? txn.name ?? '')
   const [saving, setSaving] = useState(false)
 
-  const matchText = txn.merchant_name ?? txn.name ?? ''
-  const canRule = !!matchText && !!onCreateRule
+  const canRule = !!onCreateRule
 
   function markCreditCardPayment() {
     setCategory('transfer')
@@ -43,9 +43,9 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
     setSaving(true)
     try {
       const trimmedNotes = notes.trim() || null
-      if (makeRule && canRule && onCreateRule) {
+      if (makeRule && onCreateRule && ruleMatch.trim()) {
         await onCreateRule({
-          match_text: matchText,
+          match_text: ruleMatch,
           category,
           note: trimmedNotes,
           savings_bucket: savingsBucket || null
@@ -116,10 +116,26 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
         </label>
 
         {canRule && (
-          <label className="finance__check">
-            <input type="checkbox" checked={makeRule} onChange={(e) => setMakeRule(e.target.checked)} />
-            <span>Always classify “{matchText}” as {CATEGORY_LABELS[category]} from now on</span>
-          </label>
+          <>
+            <label className="finance__check">
+              <input type="checkbox" checked={makeRule} onChange={(e) => setMakeRule(e.target.checked)} />
+              <span>
+                Always classify matching transactions as {CATEGORY_LABELS[category]}
+                {savingsBucket ? ` · ${SAVINGS_LABELS[savingsBucket]}` : ''} from now on
+              </span>
+            </label>
+            {makeRule && (
+              <label className="finance__field">
+                <span>Match when the description contains</span>
+                <input
+                  type="text"
+                  value={ruleMatch}
+                  onChange={(e) => setRuleMatch(e.target.value)}
+                  placeholder="e.g. XXXXXX1234"
+                />
+              </label>
+            )}
+          </>
         )}
 
         <div className="finance__editorActions">

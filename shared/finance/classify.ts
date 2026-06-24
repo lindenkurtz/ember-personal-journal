@@ -34,7 +34,11 @@ export function detectSavingsBucket(account: FinanceAccount | undefined, amount:
   const hay = `${account.institution_name ?? ''} ${account.official_name ?? ''} ${account.name}`.toLowerCase()
   if (hay.includes('roth') || hay.includes('ira') || hay.includes('retirement')) return 'retirement'
   if (hay.includes('emergency')) return 'short_term'
-  if (hay.includes('investment') || hay.includes('brokerage') || hay.includes('savings') || hay.includes('long')) return 'long_term'
+  // Long-term: brokerage/investment vehicles, including UTMA/custodial accounts.
+  if (
+    hay.includes('investment') || hay.includes('brokerage') || hay.includes('savings') || hay.includes('long') ||
+    hay.includes('utma') || hay.includes('uniform transfers') || hay.includes('custodial') || hay.includes('minor')
+  ) return 'long_term'
   return null
 }
 

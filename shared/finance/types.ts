@@ -88,6 +88,19 @@ export interface FinanceSettings {
   last_full_sync_date: string | null
 }
 
+// A user-defined classification rule. `match_text` is a lowercased substring
+// tested against a transaction's merchant_name + name; the first matching rule
+// wins and stamps its category/note/savings_bucket. Created from a single
+// transaction in the editor, applied to all future matches.
+export interface FinanceRule {
+  id: number
+  match_text: string
+  category: Category
+  note: string | null
+  savings_bucket: SavingsBucket | null
+  created_at?: string
+}
+
 export interface SyncSummary {
   accounts: number
   added: number

@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import type { FinanceAccount, SyncSummary } from './types'
+import type { FinanceAccount, FinanceRule, SyncSummary } from './types'
 import { classify } from './classify'
 import { computeNetWorth } from './networth'
 import {
@@ -48,16 +48,16 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
   const plaidEnv = { PLAID_CLIENT_ID: env.PLAID_CLIENT_ID, PLAID_SECRET: env.PLAID_SECRET, PLAID_ENV: env.PLAID_ENV }
   const summary: SyncSummary = { accounts: 0, added: 0, modified: 0, removed: 0, net_worth: null, errors: [] }
 
-  const [{ data: itemRows }, { data: acctRows }, { data: settingsRow }] = await Promise.all([
+  const [{ data: itemRows }, { data: acctRows }, { data: ruleRows }] = await Promise.all([
     supabase.from('finance_plaid_items').select('item_id, access_token, institution_name, transactions_cursor'),
     supabase.from('finance_accounts').select('*'),
-    supabase.from('finance_settings').select('cc_payment_payee').eq('id', 1).maybeSingle()
+    supabase.from('finance_rules').select('*')
   ])
 
   const items = (itemRows ?? []) as ItemRow[]
   const accountsById = new Map<string, FinanceAccount>()
   for (const a of (acctRows ?? []) as FinanceAccount[]) accountsById.set(a.account_id, a)
-  const ccPayee = (settingsRow as { cc_payment_payee: string | null } | null)?.cc_payment_payee ?? null
+  const rules = (ruleRows ?? []) as FinanceRule[]
 
   const incoming: PlaidTransaction[] = []
   const removedIds: string[] = []
@@ -114,7 +114,7 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
     }
   }
 
-  await upsertTransactions(supabase, incoming, accountsById, ccPayee)
+  await upsertTransactions(supabase, incoming, accountsById, rules)
 
   if (removedIds.length) {
     await supabase.from('finance_transactions').delete().in('id', removedIds)
@@ -178,7 +178,7 @@ async function upsertTransactions(
   supabase: SupabaseClient,
   incoming: PlaidTransaction[],
   accountsById: Map<string, FinanceAccount>,
-  ccPayee: string | null
+  rules: FinanceRule[]
 ): Promise<void> {
   if (!incoming.length) return
   const ids = incoming.map((t) => t.transaction_id)
@@ -226,7 +226,7 @@ async function upsertTransactions(
         pfc_detailed: t.personal_finance_category?.detailed
       },
       accountsById.get(t.account_id),
-      { cc_payment_payee: ccPayee }
+      { rules }
     )
     return {
       ...base,

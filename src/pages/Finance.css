@@ -241,6 +241,22 @@
 .finance__importName { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .finance__importMeta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
+/* Rules list */
+.finance__rules { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.finance__rule { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.finance__ruleInfo { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.finance__ruleMatch { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finance__ruleMeta { color: var(--muted); font-size: 12px; }
+
+/* All-transactions modal */
+.finance__editor--tall { max-height: 80vh; display: flex; flex-direction: column; }
+.finance__allList { display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+.finance__allMonth { display: flex; flex-direction: column; gap: 6px; }
+.finance__allMonthHead {
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  position: sticky; top: 0; background: var(--card); padding: 4px 0;
+}
+
 @media (min-width: 560px) {
   .finance__overlay { align-items: center; }
   .finance__editor { border-radius: var(--radius-lg); }

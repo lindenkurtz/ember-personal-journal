@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Category, FinanceAccount, FinanceBalance, FinanceSettings, LoanBalance, NetWorthSnapshot, FinanceTransaction } from '../../shared/finance/types'
+import type { Category, FinanceAccount, FinanceBalance, FinanceRule, FinanceSettings, LoanBalance, NetWorthSnapshot, FinanceTransaction } from '../../shared/finance/types'
 import { getAccounts, updateAccount } from '../lib/finance/accounts'
 import { getLatestBalances, getNetWorthSnapshots } from '../lib/finance/balances'
-import { getFinanceSettings, updateFinanceSettings } from '../lib/finance/settings'
+import { getFinanceSettings } from '../lib/finance/settings'
 import { getLatestLoan, setManualLoan } from '../lib/finance/loans'
 import { getTransactionsRange, getReviewQueue, updateTransaction, deleteTransaction, insertTransactions, TransactionPatch } from '../lib/finance/transactions'
+import { getRules, createRule, deleteRule, NewRule } from '../lib/finance/rules'
 import { runPlaidSync } from '../lib/finance/plaid'
-import { importAppleCardCsv } from '../lib/finance/csv'
 import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
 import { cashFlow, categoryBreakdown, savingsRates, subscriptionsTotal } from '../lib/finance/analytics'
+import { CATEGORY_LABELS } from '../../shared/finance/categories'
 import { monthKey, monthRange, prevMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
 import PlaidLinkButton from '../components/finance/PlaidLinkButton'
@@ -22,6 +23,7 @@ import MonthlySummary from '../components/finance/MonthlySummary'
 import ReviewQueue from '../components/finance/ReviewQueue'
 import TransactionList from '../components/finance/TransactionList'
 import TransactionEditor from '../components/finance/TransactionEditor'
+import AllTransactions from '../components/finance/AllTransactions'
 import './Finance.css'
 
 export default function Finance() {
@@ -32,14 +34,15 @@ export default function Finance() {
   const [loan, setLoan] = useState<LoanBalance | null>(null)
   const [txns, setTxns] = useState<FinanceTransaction[]>([]) // last ~4 months
   const [review, setReview] = useState<FinanceTransaction[]>([])
+  const [rules, setRules] = useState<FinanceRule[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [editing, setEditing] = useState<FinanceTransaction | null>(null)
   const [candidates, setCandidates] = useState<FinanceTransaction[] | null>(null)
+  const [showAll, setShowAll] = useState(false)
   const [shotAccount, setShotAccount] = useState(LOCAL_ACCOUNTS[0].account_id)
   const [importing, setImporting] = useState(false)
-  const csvInput = useRef<HTMLInputElement>(null)
   const shotInput = useRef<HTMLInputElement>(null)
 
   const month = monthKey()
@@ -48,14 +51,15 @@ export default function Finance() {
   async function load() {
     const range = monthRange(startMonth)
     const end = monthRange(month).end
-    const [acc, bal, snaps, set, ln, tx, rev] = await Promise.all([
+    const [acc, bal, snaps, set, ln, tx, rev, rul] = await Promise.all([
       getAccounts(),
       getLatestBalances(),
       getNetWorthSnapshots(),
       getFinanceSettings(),
       getLatestLoan(),
       getTransactionsRange(range.start, end),
-      getReviewQueue()
+      getReviewQueue(),
+      getRules()
     ])
     setAccounts(acc)
     setBalances(bal)
@@ -64,6 +68,13 @@ export default function Finance() {
     setLoan(ln)
     setTxns(tx)
     setReview(rev)
+    setRules(rul)
+  }
+
+  const accountName = (id: string | null): string | null => {
+    if (!id) return null
+    const a = accounts.find((x) => x.account_id === id) ?? LOCAL_ACCOUNTS.find((x) => x.account_id === id)
+    return a ? a.name : null
   }
 
   useEffect(() => {
@@ -125,20 +136,6 @@ export default function Finance() {
     }
   }
 
-  async function handleCsv(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      const r = await importAppleCardCsv(file)
-      setSyncMsg(`Apple Card: imported ${r.inserted} of ${r.parsed} rows`)
-      await load()
-    } catch (err) {
-      setSyncMsg(`CSV import failed: ${err}`)
-    } finally {
-      if (csvInput.current) csvInput.current.value = ''
-    }
-  }
-
   async function handleScreenshot(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
@@ -196,9 +193,14 @@ export default function Finance() {
     await load()
   }
 
-  async function handlePayee(value: string) {
-    const next = await updateFinanceSettings({ cc_payment_payee: value.trim() || null })
-    setSettings(next)
+  async function handleCreateRule(rule: NewRule) {
+    await createRule(rule)
+    setRules(await getRules())
+  }
+
+  async function handleDeleteRule(id: number) {
+    await deleteRule(id)
+    setRules(await getRules())
   }
 
   return (
@@ -220,8 +222,6 @@ export default function Finance() {
           {syncing ? 'Syncing…' : 'Sync now'}
         </button>
         <PlaidLinkButton onLinked={load} />
-        <button className="finance__ghostBtn" onClick={() => csvInput.current?.click()}>Import Apple Card CSV</button>
-        <input ref={csvInput} type="file" accept=".csv" hidden onChange={handleCsv} />
         <span className="finance__shot">
           <select className="finance__sel" value={shotAccount} onChange={(e) => setShotAccount(e.target.value)}>
             {LOCAL_ACCOUNTS.map((a) => <option key={a.account_id} value={a.account_id}>{a.name}</option>)}
@@ -239,7 +239,7 @@ export default function Finance() {
         <p className="finance__empty" style={{ textAlign: 'center', padding: '40px 0' }}>Loading…</p>
       ) : accounts.length === 0 && txns.length === 0 ? (
         <section className="dash__card">
-          <p className="finance__empty">No accounts yet. Connect a bank with Plaid, or import an Apple Card CSV to get started.</p>
+          <p className="finance__empty">No accounts yet. Connect a bank with Plaid, or add transactions from a screenshot to get started.</p>
         </section>
       ) : (
         <>
@@ -292,22 +292,32 @@ export default function Finance() {
           </section>
 
           <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Transactions</h2><span className="muted">{prettyMonth(month)}</span></div>
+            <div className="dash__cardHeader">
+              <h2>Transactions</h2>
+              <button className="finance__ghostBtn finance__ghostBtn--sm" onClick={() => setShowAll(true)}>See all</button>
+            </div>
+            <span className="muted">{prettyMonth(month)}</span>
             <TransactionList items={monthTxns} onEdit={setEditing} />
           </section>
 
           <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Rules</h2></div>
-            <label className="finance__field">
-              <span>Credit-card-payment payee (Apple Cash → mom)</span>
-              <input
-                type="text"
-                defaultValue={settings?.cc_payment_payee ?? ''}
-                placeholder="e.g. mom's Venmo/name"
-                onBlur={(e) => handlePayee(e.target.value)}
-              />
-            </label>
-            <p className="finance__hint">Transactions to this payee are auto-tagged as Credit Card Payment (transfer) on the next sync.</p>
+            <div className="dash__cardHeader"><h2>Rules</h2><span className="muted">{rules.length} active</span></div>
+            <p className="finance__hint">Create rules by opening a transaction and ticking “Always classify … from now on”. Each rule auto-applies to future matching transactions on sync and screenshot import.</p>
+            {rules.length === 0 ? (
+              <p className="finance__empty">No rules yet.</p>
+            ) : (
+              <div className="finance__rules">
+                {rules.map((r) => (
+                  <div className="finance__rule" key={r.id}>
+                    <div className="finance__ruleInfo">
+                      <span className="finance__ruleMatch">“{r.match_text}”</span>
+                      <span className="finance__ruleMeta">→ {CATEGORY_LABELS[r.category]}{r.note ? ` · ${r.note}` : ''}</span>
+                    </div>
+                    <button className="finance__ghostBtn finance__ghostBtn--sm finance__ghostBtn--danger" onClick={() => handleDeleteRule(r.id)}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </>
       )}
@@ -315,10 +325,16 @@ export default function Finance() {
       {editing && (
         <TransactionEditor
           txn={editing}
+          accountName={accountName(editing.account_id)}
           onSave={handleSave}
           onClose={() => setEditing(null)}
           onDelete={handleDelete}
+          onCreateRule={handleCreateRule}
         />
+      )}
+
+      {showAll && (
+        <AllTransactions onEdit={(t) => { setShowAll(false); setEditing(t) }} onClose={() => setShowAll(false)} />
       )}
 
       {candidates && (

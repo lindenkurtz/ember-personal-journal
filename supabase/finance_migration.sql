@@ -148,3 +148,24 @@ alter table finance_settings enable row level security;
 create policy "anon read settings"   on finance_settings for select to anon using (true);
 create policy "anon insert settings" on finance_settings for insert to anon with check (true);
 create policy "anon update settings" on finance_settings for update to anon using (true) with check (true);
+
+-- ---------------------------------------------------------------------------
+-- finance_rules — user-defined classification rules. Created from a single
+-- transaction in the editor ("always classify X as …") and applied to every
+-- future matching transaction on the next Plaid sync or screenshot import.
+-- `match_text` is a lowercased substring matched against merchant_name + name.
+-- ---------------------------------------------------------------------------
+create table if not exists finance_rules (
+  id bigint generated always as identity primary key,
+  match_text text not null,
+  category text not null,
+  note text,                 -- stamped onto notes (e.g. 'Credit Card Payment')
+  savings_bucket text,       -- 'short_term' | 'long_term' | 'retirement' | null
+  created_at timestamptz not null default now()
+);
+create index if not exists finance_rules_created_idx on finance_rules (created_at desc);
+alter table finance_rules enable row level security;
+create policy "anon read rules"   on finance_rules for select to anon using (true);
+create policy "anon insert rules" on finance_rules for insert to anon with check (true);
+create policy "anon update rules" on finance_rules for update to anon using (true) with check (true);
+create policy "anon delete rules" on finance_rules for delete to anon using (true);

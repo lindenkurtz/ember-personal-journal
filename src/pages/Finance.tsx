@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Category, FinanceAccount, FinanceBalance, FinanceSettings, LoanBalance, NetWorthSnapshot, FinanceTransaction } from '../../shared/finance/types'
 import { getAccounts, updateAccount } from '../lib/finance/accounts'
-import { getLatestBalances, getNetWorthSnapshots } from '../lib/finance/balances'
+import { getLatestBalances, getBalanceHistory, getNetWorthSnapshots } from '../lib/finance/balances'
 import { getFinanceSettings, updateFinanceSettings } from '../lib/finance/settings'
 import { getLatestLoan, setManualLoan } from '../lib/finance/loans'
 import { getTransactionsRange, getReviewQueue, updateTransaction, deleteTransaction, insertTransactions, TransactionPatch } from '../lib/finance/transactions'
@@ -11,7 +11,7 @@ import { importAppleCardCsv } from '../lib/finance/csv'
 import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
 import { cashFlow, categoryBreakdown, savingsRates, subscriptionsTotal } from '../lib/finance/analytics'
-import { monthKey, monthRange, prevMonthKey, prettyMonth } from '../lib/date'
+import { monthKey, monthRange, prevMonthKey, nextMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
 import PlaidLinkButton from '../components/finance/PlaidLinkButton'
 import ImportReview from '../components/finance/ImportReview'
@@ -27,6 +27,7 @@ import './Finance.css'
 export default function Finance() {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [balances, setBalances] = useState<Map<string, FinanceBalance>>(new Map())
+  const [balanceHistory, setBalanceHistory] = useState<FinanceBalance[]>([])
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[]>([])
   const [settings, setSettings] = useState<FinanceSettings | null>(null)
   const [loan, setLoan] = useState<LoanBalance | null>(null)
@@ -42,15 +43,19 @@ export default function Finance() {
   const csvInput = useRef<HTMLInputElement>(null)
   const shotInput = useRef<HTMLInputElement>(null)
 
-  const month = monthKey()
+  const currentMonth = monthKey()
+  const [month, setMonth] = useState(currentMonth)
+  // Transactions are loaded for a 4-month window ending at the viewed month so
+  // the "vs last month" delta and the 3-month category average have their inputs.
   const startMonth = prevMonthKey(prevMonthKey(prevMonthKey(month)))
 
   async function load() {
     const range = monthRange(startMonth)
     const end = monthRange(month).end
-    const [acc, bal, snaps, set, ln, tx, rev] = await Promise.all([
+    const [acc, bal, hist, snaps, set, ln, tx, rev] = await Promise.all([
       getAccounts(),
       getLatestBalances(),
+      getBalanceHistory(),
       getNetWorthSnapshots(),
       getFinanceSettings(),
       getLatestLoan(),
@@ -59,6 +64,7 @@ export default function Finance() {
     ])
     setAccounts(acc)
     setBalances(bal)
+    setBalanceHistory(hist)
     setSnapshots(snaps)
     setSettings(set)
     setLoan(ln)
@@ -74,6 +80,20 @@ export default function Finance() {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-fetch only the transaction window when navigating to another month; the
+  // account/snapshot data is month-independent so it isn't refetched here.
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return }
+    let cancelled = false
+    const start = monthRange(prevMonthKey(prevMonthKey(prevMonthKey(month)))).start
+    const end = monthRange(month).end
+    getTransactionsRange(start, end)
+      .then((tx) => { if (!cancelled) setTxns(tx) })
+      .catch((e) => console.error('[finance]', e))
+    return () => { cancelled = true }
+  }, [month])
 
   const txnsByMonth = useMemo(() => {
     const map = new Map<string, FinanceTransaction[]>()
@@ -250,13 +270,16 @@ export default function Finance() {
             savings={savings}
             subsTotal={subs}
             pendingReview={review.length}
+            onPrev={() => setMonth((m) => prevMonthKey(m))}
+            onNext={() => setMonth((m) => nextMonthKey(m))}
+            canNext={month < currentMonth}
           />
 
           <ReviewQueue items={review} onApprove={handleApprove} onEdit={setEditing} />
 
           <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Net worth</h2><span className="muted">all-time</span></div>
-            <NetWorthChart snapshots={snapshots} />
+            <div className="dash__cardHeader"><h2>Net worth</h2><span className="muted">balance over time</span></div>
+            <NetWorthChart snapshots={snapshots} accounts={accounts} balances={balanceHistory} />
           </section>
 
           <section className="dash__card">

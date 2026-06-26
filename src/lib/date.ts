@@ -1,4 +1,4 @@
-import { format, parseISO, startOfWeek, subDays } from 'date-fns'
+import { differenceInCalendarDays, format, parseISO, startOfWeek, subDays } from 'date-fns'
 
 /** ISO date key (YYYY-MM-DD) for "today" in the user's local timezone. */
 export function todayKey(d: Date = new Date()): string {
@@ -14,6 +14,11 @@ export function lastNDays(n: number, today: Date = new Date()): string[] {
   const out: string[] = []
   for (let i = n - 1; i >= 0; i--) out.push(dayKey(subDays(today, i)))
   return out
+}
+
+/** Whole calendar days from `from` to `to` (both YYYY-MM-DD). Negative if `to` precedes `from`. */
+export function daysBetween(from: string, to: string): number {
+  return differenceInCalendarDays(parseISO(to), parseISO(from))
 }
 
 /** Human label like "Wed, May 14" for headers. */
@@ -42,6 +47,13 @@ export function monthRange(month: string): { start: string; end: string } {
 export function prevMonthKey(month: string): string {
   const [y, m] = month.split('-').map(Number)
   const d = new Date(y, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** The YYYY-MM key for the month after `month`. */
+export function nextMonthKey(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(y, m, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 

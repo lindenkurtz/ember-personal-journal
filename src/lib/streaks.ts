@@ -1,5 +1,5 @@
 import { Entry } from './entries'
-import { lastNDays, todayKey, weekStartKey } from './date'
+import { daysBetween, lastNDays, todayKey, weekStartKey } from './date'
 import { BudgetChange } from './settings'
 
 export type DayResult = 'pass' | 'fail' | 'undecided'
@@ -14,7 +14,12 @@ export function streak(
   classify: (e: Entry | undefined) => DayResult,
 ): number {
   const byDate = new Map(entries.map((e) => [e.date, e]))
-  const days = lastNDays(60).slice().reverse() // walk back from today
+  // Walk back from today across the full span of recorded history (oldest entry
+  // through today) so the streak is never capped by a fixed window. Minimum 1.
+  let earliest = todayKey()
+  for (const e of entries) if (e.date < earliest) earliest = e.date
+  const span = Math.max(1, daysBetween(earliest, todayKey()) + 1)
+  const days = lastNDays(span).slice().reverse() // walk back from today
   let n = 0
   for (const d of days) {
     const r = classify(byDate.get(d))

@@ -40,12 +40,12 @@ export default function Dashboard() {
 
   const restBudget = settings?.rest_days_per_week ?? 3
   const history = settings?.rest_budget_history
-  const gym = gymStreak(entries, restBudget, history)
-  const restLeft = restDaysLeft(entries, restBudget, history)
+  const gym = gymStreak(allEntries, restBudget, history)
+  const restLeft = restDaysLeft(allEntries, restBudget, history)
   const dwBudget = settings?.deep_work_rest_budget ?? 2
   const dwHistory = settings?.deep_work_rest_budget_history
-  const dw = deepWorkStreak(entries, dwBudget, dwHistory)
-  const dwRestLeft = deepWorkRestDaysLeft(entries, dwBudget, dwHistory)
+  const dw = deepWorkStreak(allEntries, dwBudget, dwHistory)
+  const dwRestLeft = deepWorkRestDaysLeft(allEntries, dwBudget, dwHistory)
   const bestGym = bestGymStreak(allEntries, restBudget, history)
   const bestDw = bestDeepWorkStreak(allEntries, dwBudget, dwHistory)
 

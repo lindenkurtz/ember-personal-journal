@@ -15,6 +15,16 @@ export async function getLatestBalances(): Promise<Map<string, FinanceBalance>> 
   return latest
 }
 
+/** Full per-account balance history (one row per account per sync day), oldest first. */
+export async function getBalanceHistory(): Promise<FinanceBalance[]> {
+  const { data, error } = await supabase
+    .from('finance_balances')
+    .select('account_id, as_of, balance')
+    .order('as_of', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as FinanceBalance[]
+}
+
 export async function getNetWorthSnapshots(): Promise<NetWorthSnapshot[]> {
   const { data, error } = await supabase
     .from('finance_net_worth_snapshots')

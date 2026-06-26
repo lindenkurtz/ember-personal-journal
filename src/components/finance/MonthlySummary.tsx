@@ -8,15 +8,22 @@ interface Props {
   savings: SavingsRates
   subsTotal: number
   pendingReview: number
+  onPrev: () => void
+  onNext: () => void
+  canNext: boolean
 }
 
 /** Condensed top-of-page panel built for the ~15-minute monthly check-in. */
-export default function MonthlySummary({ monthLabel, flow, prior, savings, subsTotal, pendingReview }: Props) {
+export default function MonthlySummary({ monthLabel, flow, prior, savings, subsTotal, pendingReview, onPrev, onNext, canNext }: Props) {
   const delta = flow.net - prior.net
   return (
     <section className="finance__summary">
       <div className="finance__summaryHead">
-        <h2>{monthLabel}</h2>
+        <div className="finance__monthNav">
+          <button className="finance__navBtn" onClick={onPrev} aria-label="Previous month">‹</button>
+          <h2>{monthLabel}</h2>
+          <button className="finance__navBtn" onClick={onNext} disabled={!canNext} aria-label="Next month">›</button>
+        </div>
         {pendingReview > 0 && <span className="finance__badge">{pendingReview} to review</span>}
       </div>
 

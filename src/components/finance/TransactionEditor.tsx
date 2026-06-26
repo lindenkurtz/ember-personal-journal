@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Category, FinanceTransaction, SavingsBucket } from '../../../shared/finance/types'
 import { CATEGORIES, CATEGORY_LABELS } from '../../../shared/finance/categories'
 import type { TransactionPatch } from '../../lib/finance/transactions'
+import type { NewRule } from '../../lib/finance/rules'
 import { money } from '../../lib/finance/format'
 
 const SAVINGS_LABELS: Record<SavingsBucket, string> = {
@@ -12,35 +13,54 @@ const SAVINGS_LABELS: Record<SavingsBucket, string> = {
 
 interface Props {
   txn: FinanceTransaction
+  accountName?: string | null
   onSave: (patch: TransactionPatch) => Promise<void>
   onClose: () => void
   onDelete?: (id: string) => Promise<void>
+  onCreateRule?: (rule: NewRule) => Promise<void>
 }
 
 /** Full per-transaction editor — every field the user can override. */
-export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Props) {
+export default function TransactionEditor({ txn, accountName, onSave, onClose, onDelete, onCreateRule }: Props) {
   const [category, setCategory] = useState<Category>(txn.category)
   const [notes, setNotes] = useState(txn.notes ?? '')
   const [isTransfer, setIsTransfer] = useState(txn.is_transfer)
-  const [isSplit, setIsSplit] = useState(txn.is_split)
-  const [splitAmount, setSplitAmount] = useState(txn.split_amount?.toString() ?? '')
   const [savingsBucket, setSavingsBucket] = useState<SavingsBucket | ''>(txn.savings_bucket ?? '')
-  const [reviewed, setReviewed] = useState(txn.reviewed)
+  const [makeRule, setMakeRule] = useState(false)
+  const [ruleMatch, setRuleMatch] = useState(txn.merchant_name ?? txn.name ?? '')
   const [saving, setSaving] = useState(false)
+
+  const canRule = !!onCreateRule
+
+  function markCreditCardPayment() {
+    setCategory('transfer')
+    setIsTransfer(true)
+    setSavingsBucket('')
+    if (!notes.trim()) setNotes('Credit Card Payment')
+  }
 
   async function save() {
     setSaving(true)
     try {
+      const trimmedNotes = notes.trim() || null
+      if (makeRule && onCreateRule && ruleMatch.trim()) {
+        await onCreateRule({
+          match_text: ruleMatch,
+          category,
+          note: trimmedNotes,
+          savings_bucket: savingsBucket || null
+        })
+      }
       await onSave({
         id: txn.id,
         category,
-        notes: notes.trim() || null,
+        notes: trimmedNotes,
         is_transfer: isTransfer,
-        is_split: isSplit,
-        split_amount: isSplit && splitAmount ? parseFloat(splitAmount) : null,
         savings_bucket: savingsBucket || null,
-        reviewed,
-        flagged_for_review: txn.flagged_for_review && !reviewed
+        // Editing a transaction marks it reviewed: it leaves the review queue
+        // and is preserved verbatim across future syncs.
+        reviewed: true,
+        flagged_for_review: false
       })
       onClose()
     } finally {
@@ -54,7 +74,10 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
         <div className="finance__editorHead">
           <div>
             <div className="finance__editorName">{txn.merchant_name ?? txn.name ?? 'Transaction'}</div>
-            <div className="finance__editorMeta">{txn.date} · {money(txn.amount, { cents: true, signed: true })}</div>
+            <div className="finance__editorMeta">
+              {txn.date} · {money(txn.amount, { cents: true, signed: true })}
+              {accountName ? ` · ${accountName}` : ''}
+            </div>
           </div>
           <button className="finance__iconBtn" onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -68,6 +91,10 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
           </select>
         </label>
 
+        <button className="finance__ghostBtn finance__ghostBtn--sm" onClick={markCreditCardPayment}>
+          Mark as credit-card payment
+        </button>
+
         <label className="finance__field">
           <span>Notes</span>
           <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" />
@@ -77,17 +104,6 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
           <input type="checkbox" checked={isTransfer} onChange={(e) => setIsTransfer(e.target.checked)} />
           <span>Internal transfer (exclude from spending)</span>
         </label>
-
-        <label className="finance__check">
-          <input type="checkbox" checked={isSplit} onChange={(e) => setIsSplit(e.target.checked)} />
-          <span>Split — I only owe part of this</span>
-        </label>
-        {isSplit && (
-          <label className="finance__field">
-            <span>My actual amount</span>
-            <input type="number" inputMode="decimal" value={splitAmount} onChange={(e) => setSplitAmount(e.target.value)} placeholder="0.00" />
-          </label>
-        )}
 
         <label className="finance__field">
           <span>Savings contribution</span>
@@ -99,10 +115,28 @@ export default function TransactionEditor({ txn, onSave, onClose, onDelete }: Pr
           </select>
         </label>
 
-        <label className="finance__check">
-          <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
-          <span>Reviewed</span>
-        </label>
+        {canRule && (
+          <>
+            <label className="finance__check">
+              <input type="checkbox" checked={makeRule} onChange={(e) => setMakeRule(e.target.checked)} />
+              <span>
+                Always classify matching transactions as {CATEGORY_LABELS[category]}
+                {savingsBucket ? ` · ${SAVINGS_LABELS[savingsBucket]}` : ''} from now on
+              </span>
+            </label>
+            {makeRule && (
+              <label className="finance__field">
+                <span>Match when the description contains</span>
+                <input
+                  type="text"
+                  value={ruleMatch}
+                  onChange={(e) => setRuleMatch(e.target.value)}
+                  placeholder="e.g. XXXXXX1234"
+                />
+              </label>
+            )}
+          </>
+        )}
 
         <div className="finance__editorActions">
           {onDelete && (

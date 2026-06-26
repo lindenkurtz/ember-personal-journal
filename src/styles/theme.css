@@ -19,6 +19,12 @@
   --amber-glow: rgba(232, 168, 124, 0.28);
   --terracotta: #D4845A;
   --terracotta-soft: rgba(212, 132, 90, 0.18);
+  /* Savings — a warm sage, distinct from the spending oranges.
+     Three shades for the short/long/retirement stack in the cash-flow chart. */
+  --sage: #A3B07C;
+  --sage-deep: #879A63;
+  --sage-light: #C3CC9E;
+  --sage-soft: rgba(163, 176, 124, 0.18);
 
   /* Geometry */
   --radius: 16px;

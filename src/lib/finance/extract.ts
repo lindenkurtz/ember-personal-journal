@@ -7,8 +7,10 @@
  */
 import type { Category, FinanceAccount, FinanceTransaction } from '../../../shared/finance/types'
 import { CATEGORIES, CATEGORY_LABELS } from '../../../shared/finance/categories'
+import { matchRule } from '../../../shared/finance/classify'
 import { callClaude } from '../claude'
 import { todayKey } from '../date'
+import { getRules } from './rules'
 import { contentHash } from './hash'
 
 async function fileToImage(file: File): Promise<{ media_type: string; data: string }> {
@@ -72,13 +74,18 @@ export async function extractTransactions(files: File[], account: FinanceAccount
     throw new Error('Could not read the screenshot — try a clearer/cropped image.')
   }
 
+  const rules = await getRules()
   const byId = new Map<string, FinanceTransaction>()
   for (const r of raw) {
     const date = toIso(r.date)
     const amount = typeof r.amount === 'number' ? r.amount : parseFloat(String(r.amount ?? ''))
     if (!date || Number.isNaN(amount)) continue
-    const category: Category = CATEGORIES.includes(r.category as Category) ? (r.category as Category) : 'shopping'
+    let category: Category = CATEGORIES.includes(r.category as Category) ? (r.category as Category) : 'shopping'
     const merchant = (r.merchant ?? '').trim() || null
+    // A user rule (e.g. "payments to mom = credit card payment") overrides
+    // Claude's category on import.
+    const rule = matchRule(merchant, merchant, rules)
+    if (rule) category = rule.category
     const id = 'shot-' + contentHash([date, amount, merchant ?? '', account.account_id])
     byId.set(id, {
       id,
@@ -89,12 +96,12 @@ export async function extractTransactions(files: File[], account: FinanceAccount
       name: merchant,
       plaid_category: null,
       category,
-      notes: null,
+      notes: rule?.note ?? null,
       is_transfer: category === 'transfer',
       is_split: false,
       split_amount: null,
-      savings_bucket: null,
-      flagged_for_review: category === 'peer_payment',
+      savings_bucket: rule?.savings_bucket ?? null,
+      flagged_for_review: false,
       reviewed: false,
       source: 'manual',
       pending: false

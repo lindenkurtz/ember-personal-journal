@@ -1,4 +1,4 @@
-import type { Category, FinanceAccount, SavingsBucket } from './types'
+import type { Category, FinanceAccount, FinanceRule, SavingsBucket } from './types'
 import { mapPlaidCategory, isSubscriptionMerchant } from './categories'
 
 export interface ClassifyInput {
@@ -10,7 +10,7 @@ export interface ClassifyInput {
 }
 
 export interface ClassifyContext {
-  cc_payment_payee: string | null
+  rules: FinanceRule[]
 }
 
 export interface ClassifyResult {
@@ -34,7 +34,11 @@ export function detectSavingsBucket(account: FinanceAccount | undefined, amount:
   const hay = `${account.institution_name ?? ''} ${account.official_name ?? ''} ${account.name}`.toLowerCase()
   if (hay.includes('roth') || hay.includes('ira') || hay.includes('retirement')) return 'retirement'
   if (hay.includes('emergency')) return 'short_term'
-  if (hay.includes('investment') || hay.includes('brokerage') || hay.includes('savings') || hay.includes('long')) return 'long_term'
+  // Long-term: brokerage/investment vehicles, including UTMA/custodial accounts.
+  if (
+    hay.includes('investment') || hay.includes('brokerage') || hay.includes('savings') || hay.includes('long') ||
+    hay.includes('utma') || hay.includes('uniform transfers') || hay.includes('custodial') || hay.includes('minor')
+  ) return 'long_term'
   return null
 }
 
@@ -47,6 +51,40 @@ function institutionMatches(account: FinanceAccount | undefined, needle: string)
 function textMatches(input: ClassifyInput, needle: string): boolean {
   const hay = `${input.merchant_name ?? ''} ${input.name ?? ''}`.toLowerCase()
   return hay.includes(needle.toLowerCase())
+}
+
+// A transfer headed into a Brokerage account. We can detect it by description
+// even when the destination Brokerage account isn't connected (investment/Roth
+// transactions often don't sync), but the description alone can't say which
+// bucket — so we surface these for a one-time manual bucketing in the editor.
+function isBrokerageBound(input: ClassifyInput): boolean {
+  const hay = `${input.merchant_name ?? ''} ${input.name ?? ''}`.toLowerCase()
+  return hay.includes('brokerage') || hay.includes('brokerage inc')
+}
+
+/**
+ * First user-defined rule whose `match_text` is a substring of the
+ * transaction's merchant/name. Shared by the Plaid path (classify) and the
+ * screenshot-import path (extract) so both honour the same rules.
+ */
+export function matchRule(merchant: string | null, name: string | null, rules: FinanceRule[]): FinanceRule | null {
+  const hay = `${merchant ?? ''} ${name ?? ''}`.toLowerCase()
+  for (const r of rules) {
+    if (r.match_text && hay.includes(r.match_text.toLowerCase())) return r
+  }
+  return null
+}
+
+export function ruleResult(rule: FinanceRule): ClassifyResult {
+  const isTransfer = rule.category === 'transfer'
+  return {
+    category: rule.category,
+    is_transfer: isTransfer,
+    flagged_for_review: false,
+    reviewed: true,
+    notes: rule.note,
+    savings_bucket: rule.savings_bucket
+  }
 }
 
 /**
@@ -62,18 +100,18 @@ export function classify(
   account: FinanceAccount | undefined,
   ctx: ClassifyContext
 ): ClassifyResult {
+  // User-defined rules win over everything else.
+  const rule = matchRule(input.merchant_name, input.name, ctx.rules)
+  if (rule) return ruleResult(rule)
+
   const isAppleCash = institutionMatches(account, 'apple cash')
   const isVenmo = institutionMatches(account, 'venmo') || textMatches(input, 'venmo')
   const savings = detectSavingsBucket(account, input.amount)
 
-  // Venmo / peer money is almost never a clean expense — always hold for review.
+  // Venmo / peer money: categorize as a peer payment but don't force review —
+  // most of these need no action. Use a rule to auto-handle recurring ones.
   if (isVenmo) {
-    return { category: 'peer_payment', is_transfer: false, flagged_for_review: true, reviewed: false, notes: null, savings_bucket: null }
-  }
-
-  // Apple Cash → mom: the weekly Apple Card payoff. A transfer, never an expense.
-  if (isAppleCash && input.amount < 0 && ctx.cc_payment_payee && textMatches(input, ctx.cc_payment_payee)) {
-    return { category: 'transfer', is_transfer: true, flagged_for_review: false, reviewed: true, notes: 'Credit Card Payment', savings_bucket: null }
+    return { category: 'peer_payment', is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: null }
   }
 
   // Apple Cash inflow from Apple Card rewards.
@@ -84,7 +122,22 @@ export function classify(
   // Plaid-tagged transfers between accounts — treat as internal moves. A
   // transfer landing in a savings/retirement account also carries its bucket.
   if (input.pfc_primary === 'TRANSFER_IN' || input.pfc_primary === 'TRANSFER_OUT' || input.pfc_primary === 'LOAN_PAYMENTS') {
-    return { category: 'transfer', is_transfer: true, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: savings }
+    // Outflow to Brokerage with no auto-detected bucket: surface for manual bucketing.
+    const needsBucket = !savings && input.amount < 0 && isBrokerageBound(input)
+    return {
+      category: 'transfer',
+      is_transfer: true,
+      flagged_for_review: needsBucket,
+      reviewed: !needsBucket,
+      notes: needsBucket ? 'Set savings bucket' : null,
+      savings_bucket: savings
+    }
+  }
+
+  // Brokerage-bound outflow Plaid didn't tag as a transfer — still a savings
+  // move; flag it so the bucket gets set once in the editor (see savingsRates).
+  if (input.amount < 0 && isBrokerageBound(input)) {
+    return { category: 'transfer', is_transfer: true, flagged_for_review: true, reviewed: false, notes: 'Set savings bucket', savings_bucket: null }
   }
 
   if (isSubscriptionMerchant(input.name, input.merchant_name)) {

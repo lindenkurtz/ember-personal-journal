@@ -20,6 +20,16 @@ export async function getTransactionsRange(start: string, end: string): Promise<
   return (data ?? []) as FinanceTransaction[]
 }
 
+/** Every transaction, newest first. Backs the "See all" all-time view. */
+export async function getAllTransactions(): Promise<FinanceTransaction[]> {
+  const { data, error } = await supabase
+    .from('finance_transactions')
+    .select('*')
+    .order('date', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as FinanceTransaction[]
+}
+
 export async function getReviewQueue(): Promise<FinanceTransaction[]> {
   const { data, error } = await supabase
     .from('finance_transactions')

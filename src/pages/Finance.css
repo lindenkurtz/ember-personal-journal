@@ -159,9 +159,6 @@
 .finance__subName { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .finance__subAmt { font-size: 13px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
-/* Cash-flow chart legend */
-.finance__chartLegend { display: flex; justify-content: center; gap: 16px; margin-top: 6px; color: var(--muted); font-size: 12px; }
-
 /* Net worth chart */
 .finance__chartWrap { display: flex; flex-direction: column; gap: 12px; }
 .finance__chartSel { align-self: flex-end; max-width: 100%; }

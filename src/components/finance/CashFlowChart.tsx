@@ -36,15 +36,6 @@ function CashTooltip({ active, payload, label }: { active?: boolean; payload?: T
   )
 }
 
-function LegendDot({ color, children }: { color: string; children: string }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 9, height: 9, borderRadius: '50%', background: color }} />
-      {children}
-    </span>
-  )
-}
-
 /**
  * Two bars: income, and where it went. The income bar stacks each payer source
  * (discovered from the data, not enumerated here); the "Out" bar stacks spending
@@ -68,35 +59,26 @@ export default function CashFlowChart({ flow, income, savings }: Props) {
   }
   const data = [incomeRow, outRow]
   return (
-    <>
-      <ResponsiveContainer width="100%" height={190}>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
-          <CartesianGrid stroke="rgba(245,237,216,0.06)" vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} />
-          <YAxis tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} width={56} tickFormatter={(v: number) => money(v)} />
-          <Tooltip cursor={{ fill: 'rgba(232,168,124,0.08)' }} content={<CashTooltip />} />
-          {income.map((s, i) => (
-            <Bar
-              key={s.source}
-              dataKey={s.source}
-              stackId="a"
-              fill={incomeColor(s.source, i)}
-              radius={i === income.length - 1 ? [6, 6, 0, 0] : undefined}
-            />
-          ))}
-          <Bar dataKey="Spending" stackId="a" fill="var(--terracotta)" />
-          <Bar dataKey="Short-term" stackId="a" fill="var(--sage)" />
-          <Bar dataKey="Long-term" stackId="a" fill="var(--sage-deep)" />
-          <Bar dataKey="Retirement" stackId="a" fill="var(--sage-light)" radius={[6, 6, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="finance__chartLegend">
+    <ResponsiveContainer width="100%" height={190}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+        <CartesianGrid stroke="rgba(245,237,216,0.06)" vertical={false} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} />
+        <YAxis tickLine={false} axisLine={false} stroke="var(--muted)" style={{ fontSize: 12 }} width={56} tickFormatter={(v: number) => money(v)} />
+        <Tooltip cursor={{ fill: 'rgba(232,168,124,0.08)' }} content={<CashTooltip />} />
         {income.map((s, i) => (
-          <LegendDot key={s.source} color={incomeColor(s.source, i)}>{s.source}</LegendDot>
+          <Bar
+            key={s.source}
+            dataKey={s.source}
+            stackId="a"
+            fill={incomeColor(s.source, i)}
+            radius={i === income.length - 1 ? [6, 6, 0, 0] : undefined}
+          />
         ))}
-        <LegendDot color="var(--terracotta)">Spending</LegendDot>
-        <LegendDot color="var(--sage)">Savings</LegendDot>
-      </div>
-    </>
+        <Bar dataKey="Spending" stackId="a" fill="var(--terracotta)" />
+        <Bar dataKey="Short-term" stackId="a" fill="var(--sage)" />
+        <Bar dataKey="Long-term" stackId="a" fill="var(--sage-deep)" />
+        <Bar dataKey="Retirement" stackId="a" fill="var(--sage-light)" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   )
 }

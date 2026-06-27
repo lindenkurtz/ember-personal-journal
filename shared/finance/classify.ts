@@ -20,6 +20,7 @@ export interface ClassifyResult {
   reviewed: boolean
   notes: string | null
   savings_bucket: SavingsBucket | null
+  income_source: string | null
 }
 
 /**
@@ -83,7 +84,8 @@ export function ruleResult(rule: FinanceRule): ClassifyResult {
     flagged_for_review: false,
     reviewed: true,
     notes: rule.note,
-    savings_bucket: rule.savings_bucket
+    savings_bucket: rule.savings_bucket,
+    income_source: rule.income_source
   }
 }
 
@@ -111,12 +113,12 @@ export function classify(
   // Venmo / peer money: categorize as a peer payment but don't force review —
   // most of these need no action. Use a rule to auto-handle recurring ones.
   if (isVenmo) {
-    return { category: 'peer_payment', is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: null }
+    return { category: 'peer_payment', is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: null, income_source: null }
   }
 
   // Apple Cash inflow from Apple Card rewards.
   if (isAppleCash && input.amount > 0 && (textMatches(input, 'daily cash') || textMatches(input, 'apple card') || textMatches(input, 'cash back'))) {
-    return { category: 'income', is_transfer: false, flagged_for_review: false, reviewed: true, notes: 'Cash Back', savings_bucket: null }
+    return { category: 'income', is_transfer: false, flagged_for_review: false, reviewed: true, notes: 'Cash Back', savings_bucket: null, income_source: null }
   }
 
   // Plaid-tagged transfers between accounts — treat as internal moves. A
@@ -130,20 +132,21 @@ export function classify(
       flagged_for_review: needsBucket,
       reviewed: !needsBucket,
       notes: needsBucket ? 'Set savings bucket' : null,
-      savings_bucket: savings
+      savings_bucket: savings,
+      income_source: null
     }
   }
 
   // Brokerage-bound outflow Plaid didn't tag as a transfer — still a savings
   // move; flag it so the bucket gets set once in the editor (see savingsRates).
   if (input.amount < 0 && isBrokerageBound(input)) {
-    return { category: 'transfer', is_transfer: true, flagged_for_review: true, reviewed: false, notes: 'Set savings bucket', savings_bucket: null }
+    return { category: 'transfer', is_transfer: true, flagged_for_review: true, reviewed: false, notes: 'Set savings bucket', savings_bucket: null, income_source: null }
   }
 
   if (isSubscriptionMerchant(input.name, input.merchant_name)) {
-    return { category: 'subscriptions', is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: null }
+    return { category: 'subscriptions', is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: null, income_source: null }
   }
 
   const category = mapPlaidCategory(input.pfc_primary, input.pfc_detailed)
-  return { category, is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: savings }
+  return { category, is_transfer: false, flagged_for_review: false, reviewed: true, notes: null, savings_bucket: savings, income_source: null }
 }

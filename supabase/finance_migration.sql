@@ -67,6 +67,7 @@ create table if not exists finance_transactions (
   is_split boolean not null default false,
   split_amount numeric,
   savings_bucket text, -- 'short_term' | 'long_term' | 'retirement' | null
+  income_source text,  -- free-text payer label for the income stack; null = Misc
   flagged_for_review boolean not null default false,
   reviewed boolean not null default false,
   source text not null default 'plaid',
@@ -84,6 +85,8 @@ create policy "anon update txns" on finance_transactions for update to anon usin
 create policy "anon delete txns" on finance_transactions for delete to anon using (true);
 -- Idempotent: adds the savings bucket to an already-created table on re-run.
 alter table finance_transactions add column if not exists savings_bucket text;
+-- Idempotent: adds the income source label on re-run.
+alter table finance_transactions add column if not exists income_source text;
 
 -- ---------------------------------------------------------------------------
 -- finance_balances — one row per account per sync day (per-account history).
@@ -161,9 +164,12 @@ create table if not exists finance_rules (
   category text not null,
   note text,                 -- stamped onto notes (e.g. 'Credit Card Payment')
   savings_bucket text,       -- 'short_term' | 'long_term' | 'retirement' | null
+  income_source text,        -- stamped onto income_source (e.g. 'AcmeCorp')
   created_at timestamptz not null default now()
 );
 create index if not exists finance_rules_created_idx on finance_rules (created_at desc);
+-- Idempotent: adds the income source label to an already-created rules table.
+alter table finance_rules add column if not exists income_source text;
 alter table finance_rules enable row level security;
 create policy "anon read rules"   on finance_rules for select to anon using (true);
 create policy "anon insert rules" on finance_rules for insert to anon with check (true);

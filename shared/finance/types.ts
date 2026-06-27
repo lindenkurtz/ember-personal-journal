@@ -51,6 +51,10 @@ export interface FinanceTransaction {
   // savings-rate panel. Independent of is_transfer (a savings move is still a
   // transfer for cash-flow purposes). null = not a savings contribution.
   savings_bucket: SavingsBucket | null
+  // Free-text payer label that splits the income bar (e.g. 'AcmeCorp').
+  // Only meaningful on income rows; null = the "Misc" bucket. Open-ended by
+  // design — a new income stream is a new rule, never a code/enum change.
+  income_source: string | null
   flagged_for_review: boolean
   reviewed: boolean
   source: FinanceSource
@@ -98,6 +102,7 @@ export interface FinanceRule {
   category: Category
   note: string | null
   savings_bucket: SavingsBucket | null
+  income_source: string | null
   created_at?: string
 }
 

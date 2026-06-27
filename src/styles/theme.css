@@ -25,6 +25,15 @@
   --sage-deep: #879A63;
   --sage-light: #C3CC9E;
   --sage-soft: rgba(163, 176, 124, 0.18);
+  /* Income ramp — warm golds for the per-source stack in the cash-flow chart.
+     Assigned by rank (largest source first); --income-misc is the neutral
+     fallback for income with no source label and always renders last. */
+  --income-1: #E8A87C;
+  --income-2: #EFC489;
+  --income-3: #D89460;
+  --income-4: #C9A86A;
+  --income-5: #B5895C;
+  --income-misc: #8C8270;
 
   /* Geometry */
   --radius: 16px;

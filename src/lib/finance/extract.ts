@@ -101,6 +101,7 @@ export async function extractTransactions(files: File[], account: FinanceAccount
       is_split: false,
       split_amount: null,
       savings_bucket: rule?.savings_bucket ?? null,
+      income_source: rule?.income_source ?? null,
       flagged_for_review: false,
       reviewed: false,
       source: 'manual',

@@ -26,6 +26,7 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
   const [notes, setNotes] = useState(txn.notes ?? '')
   const [isTransfer, setIsTransfer] = useState(txn.is_transfer)
   const [savingsBucket, setSavingsBucket] = useState<SavingsBucket | ''>(txn.savings_bucket ?? '')
+  const [incomeSource, setIncomeSource] = useState(txn.income_source ?? '')
   const [makeRule, setMakeRule] = useState(false)
   const [ruleMatch, setRuleMatch] = useState(txn.merchant_name ?? txn.name ?? '')
   const [saving, setSaving] = useState(false)
@@ -43,12 +44,16 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
     setSaving(true)
     try {
       const trimmedNotes = notes.trim() || null
+      // The income label only applies to income rows; clear it otherwise so a
+      // recategorized transaction never carries a stale source.
+      const source = category === 'income' ? incomeSource.trim() || null : null
       if (makeRule && onCreateRule && ruleMatch.trim()) {
         await onCreateRule({
           match_text: ruleMatch,
           category,
           note: trimmedNotes,
-          savings_bucket: savingsBucket || null
+          savings_bucket: savingsBucket || null,
+          income_source: source
         })
       }
       await onSave({
@@ -57,6 +62,7 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
         notes: trimmedNotes,
         is_transfer: isTransfer,
         savings_bucket: savingsBucket || null,
+        income_source: source,
         // Editing a transaction marks it reviewed: it leaves the review queue
         // and is preserved verbatim across future syncs.
         reviewed: true,
@@ -115,13 +121,26 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
           </select>
         </label>
 
+        {category === 'income' && (
+          <label className="finance__field">
+            <span>Income source</span>
+            <input
+              type="text"
+              value={incomeSource}
+              onChange={(e) => setIncomeSource(e.target.value)}
+              placeholder="e.g. AcmeCorp · blank = Misc"
+            />
+          </label>
+        )}
+
         {canRule && (
           <>
             <label className="finance__check">
               <input type="checkbox" checked={makeRule} onChange={(e) => setMakeRule(e.target.checked)} />
               <span>
                 Always classify matching transactions as {CATEGORY_LABELS[category]}
-                {savingsBucket ? ` · ${SAVINGS_LABELS[savingsBucket]}` : ''} from now on
+                {savingsBucket ? ` · ${SAVINGS_LABELS[savingsBucket]}` : ''}
+                {category === 'income' && incomeSource.trim() ? ` · ${incomeSource.trim()}` : ''} from now on
               </span>
             </label>
             {makeRule && (

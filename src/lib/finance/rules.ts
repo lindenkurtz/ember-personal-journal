@@ -6,6 +6,7 @@ export interface NewRule {
   category: Category
   note: string | null
   savings_bucket: SavingsBucket | null
+  income_source: string | null
 }
 
 export async function getRules(): Promise<FinanceRule[]> {

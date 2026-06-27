@@ -10,7 +10,7 @@ import { getRules, createRule, deleteRule, NewRule } from '../lib/finance/rules'
 import { runPlaidSync } from '../lib/finance/plaid'
 import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
-import { cashFlow, categoryBreakdown, savingsRates } from '../lib/finance/analytics'
+import { cashFlow, categoryBreakdown, incomeBySource, savingsRates } from '../lib/finance/analytics'
 import { CATEGORY_LABELS } from '../../shared/finance/categories'
 import { monthKey, monthRange, prevMonthKey, nextMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
@@ -123,6 +123,7 @@ export default function Finance() {
   const flow = cashFlow(monthTxns)
   const priorFlow = cashFlow(priorTxns)
   const breakdown = categoryBreakdown(monthTxns)
+  const income = incomeBySource(monthTxns)
   const savings = savingsRates(monthTxns, flow.income)
   const subItems = monthTxns
     .filter((t) => t.category === 'subscriptions' && t.amount < 0)
@@ -286,7 +287,7 @@ export default function Finance() {
 
           <section className="dash__card">
             <div className="dash__cardHeader"><h2>Cash flow</h2><span className="muted">{prettyMonth(month)} · spending + savings</span></div>
-            <CashFlowChart flow={flow} savings={savings} />
+            <CashFlowChart flow={flow} income={income} savings={savings} />
           </section>
 
           <section className="dash__card">

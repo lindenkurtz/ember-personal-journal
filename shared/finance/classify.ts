@@ -43,6 +43,21 @@ export function detectSavingsBucket(account: FinanceAccount | undefined, amount:
   return null
 }
 
+/**
+ * Brokerage transfers clear through Clearing Bank, and the destination Brokerage
+ * sub-account is named only by its masked Clearing account number in the memo
+ * (e.g. "CLEARING BANK CHK XXXXXX1234"). That number is the single thing telling an
+ * Emergency from a Roth from a brokerage transfer, so it's the natural key for
+ * an auto-learned savings-bucket rule. Pending transfers carry a truncated memo
+ * without it — return null then and let the transfer bucket once it posts.
+ */
+export function brokerageDestToken(name: string | null, merchant: string | null): string | null {
+  const hay = `${merchant ?? ''} ${name ?? ''}`.toLowerCase()
+  if (!hay.includes('brokerage') && !hay.includes('brokerage inc')) return null
+  const m = hay.match(/x{4,}\d{3,}/)
+  return m ? m[0] : null
+}
+
 function institutionMatches(account: FinanceAccount | undefined, needle: string): boolean {
   if (!account) return false
   const hay = `${account.institution_name ?? ''} ${account.name ?? ''}`.toLowerCase()

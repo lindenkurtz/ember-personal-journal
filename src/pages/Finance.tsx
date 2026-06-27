@@ -6,7 +6,7 @@ import { getLatestBalances, getBalanceHistory, getNetWorthSnapshots } from '../l
 import { getFinanceSettings } from '../lib/finance/settings'
 import { getLatestLoan, setManualLoan } from '../lib/finance/loans'
 import { getTransactionsRange, getReviewQueue, updateTransaction, deleteTransaction, insertTransactions, TransactionPatch } from '../lib/finance/transactions'
-import { getRules, createRule, deleteRule, NewRule } from '../lib/finance/rules'
+import { getRules, upsertRuleByMatch, deleteRule, NewRule } from '../lib/finance/rules'
 import { runPlaidSync } from '../lib/finance/plaid'
 import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
@@ -217,7 +217,7 @@ export default function Finance() {
   }
 
   async function handleCreateRule(rule: NewRule) {
-    await createRule(rule)
+    await upsertRuleByMatch(rule)
     setRules(await getRules())
   }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Category, FinanceTransaction, SavingsBucket } from '../../../shared/finance/types'
 import { CATEGORIES, CATEGORY_LABELS } from '../../../shared/finance/categories'
+import { brokerageDestToken } from '../../../shared/finance/classify'
 import type { TransactionPatch } from '../../lib/finance/transactions'
 import type { NewRule } from '../../lib/finance/rules'
 import { money } from '../../lib/finance/format'
@@ -47,14 +48,21 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
       // The income label only applies to income rows; clear it otherwise so a
       // recategorized transaction never carries a stale source.
       const source = category === 'income' ? incomeSource.trim() || null : null
+      const bucket = savingsBucket || null
       if (makeRule && onCreateRule && ruleMatch.trim()) {
         await onCreateRule({
           match_text: ruleMatch,
           category,
           note: trimmedNotes,
-          savings_bucket: savingsBucket || null,
+          savings_bucket: bucket,
           income_source: source
         })
+      }
+      // Auto-learn the Brokerage savings destination from its Clearing clearing-account
+      // number so future transfers to the same bucket classify without review.
+      const token = bucket && category === 'transfer' ? brokerageDestToken(txn.name, txn.merchant_name) : null
+      if (token && onCreateRule && !(makeRule && ruleMatch.trim().toLowerCase() === token)) {
+        await onCreateRule({ match_text: token, category: 'transfer', note: null, savings_bucket: bucket, income_source: null })
       }
       await onSave({
         id: txn.id,

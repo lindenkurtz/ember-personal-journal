@@ -115,28 +115,6 @@
   box-shadow: none;
 }
 
-.morning__planNote {
-  width: 100%;
-  margin-top: 20px;
-  padding: 14px 16px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-size: 16px;
-  font-family: inherit;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.morning__planNote::placeholder {
-  color: var(--muted);
-}
-
-.morning__planNote:focus {
-  border-color: var(--amber);
-}
-
 .morning__error {
   color: var(--terracotta);
   font-size: 14px;

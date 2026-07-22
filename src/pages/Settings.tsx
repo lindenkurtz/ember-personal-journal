@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getSettings, updateSettings, setRestBudget, setDeepWorkRestBudget, PushSettings } from '../lib/settings'
+import { getSettings, updateSettings, setRestBudget, PushSettings } from '../lib/settings'
 import { getSubscription, pushSupport, subscribe, unsubscribe } from '../lib/push'
 import './Settings.css'
 
@@ -83,25 +83,6 @@ export default function Settings() {
     }
   }
 
-  async function changeDeepWorkRestBudget(next: number) {
-    if (!settings) return
-    const clamped = Math.max(0, Math.min(7, Math.round(next)))
-    if (clamped === settings.deep_work_rest_budget) return
-    const optimistic = { ...settings, deep_work_rest_budget: clamped }
-    setSettings(optimistic)
-    setStatus('saving')
-    setError(null)
-    try {
-      const saved = await setDeepWorkRestBudget(settings, clamped)
-      setSettings(saved)
-    } catch (e) {
-      console.error('[settings] deep work rest budget', e)
-      setError("Couldn't save — try again.")
-    } finally {
-      setStatus('idle')
-    }
-  }
-
   return (
     <main className="settings">
       <header className="settings__header">
@@ -112,10 +93,11 @@ export default function Settings() {
       <section className="settings__card">
         <div className="settings__row">
           <div className="settings__rowText">
-            <h2 className="settings__rowTitle">Daily reminders</h2>
+            <h2 className="settings__rowTitle">Reminders</h2>
             <p className="settings__rowHint">
               A push notification at your morning and evening times, but only if
-              that check-in hasn't been filled yet.
+              that check-in hasn't been filled yet — plus a Sunday reminder to
+              log last week's screen time.
             </p>
           </div>
           <Toggle
@@ -144,6 +126,15 @@ export default function Settings() {
               value={settings?.evening_time ?? '21:30'}
               disabled={!settings}
               onChange={(e) => patchSettings({ evening_time: e.target.value })}
+            />
+          </label>
+          <label className="settings__field">
+            <span>Screen time (Sun)</span>
+            <input
+              type="time"
+              value={settings?.weekly_time ?? '21:00'}
+              disabled={!settings}
+              onChange={(e) => patchSettings({ weekly_time: e.target.value })}
             />
           </label>
         </div>
@@ -185,44 +176,6 @@ export default function Settings() {
               aria-label="Increase rest days"
               disabled={!settings || status === 'saving' || (settings?.rest_days_per_week ?? 7) >= 7}
               onClick={() => changeRestBudget((settings?.rest_days_per_week ?? 0) + 1)}
-            >
-              +
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="settings__card">
-        <div className="settings__row">
-          <div className="settings__rowText">
-            <h2 className="settings__rowTitle">Deep work rest budget</h2>
-            <p className="settings__rowHint">
-              How many zero-hour days per week before the deep work streak resets. Counted Mon–Sun.
-            </p>
-          </div>
-        </div>
-
-        <div className="settings__field">
-          <span>Rest days per week</span>
-          <div className="settings__stepper">
-            <button
-              type="button"
-              className="settings__stepperBtn"
-              aria-label="Decrease deep work rest days"
-              disabled={!settings || status === 'saving' || (settings?.deep_work_rest_budget ?? 0) <= 0}
-              onClick={() => changeDeepWorkRestBudget((settings?.deep_work_rest_budget ?? 0) - 1)}
-            >
-              −
-            </button>
-            <span className="settings__stepperValue" aria-live="polite">
-              {settings?.deep_work_rest_budget ?? 2}
-            </span>
-            <button
-              type="button"
-              className="settings__stepperBtn"
-              aria-label="Increase deep work rest days"
-              disabled={!settings || status === 'saving' || (settings?.deep_work_rest_budget ?? 7) >= 7}
-              onClick={() => changeDeepWorkRestBudget((settings?.deep_work_rest_budget ?? 0) + 1)}
             >
               +
             </button>

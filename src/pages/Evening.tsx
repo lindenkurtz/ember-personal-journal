@@ -5,10 +5,22 @@ import { format, parseISO } from 'date-fns'
 import QuestionCard from '../components/QuestionCard'
 import ProgressDots from '../components/ProgressDots'
 import PillGroup from '../components/PillGroup'
-import NumberStepper from '../components/NumberStepper'
 import NoteInput from '../components/NoteInput'
 import StarRating from '../components/StarRating'
-import { getEntry, upsertEntry, GymChoice, Entry } from '../lib/entries'
+import TimeInput from '../components/TimeInput'
+import ToggleChipGroup, { ToggleChipOption } from '../components/ToggleChipGroup'
+import {
+  getEntry,
+  upsertEntry,
+  GymChoice,
+  FocusedWork,
+  EntryPatch,
+  ConfoundKey,
+  CONFOUND_KEYS,
+  CONFOUND_LABELS,
+  TRACKING_V2_START,
+  FOCUSED_WORK_START
+} from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
 import '../pages/Morning.css' // share the journal layout/buttons
 
@@ -22,16 +34,50 @@ const SOCIAL_OPTIONS = [
   { value: 'no', label: 'No' }
 ] as const
 
+const FOCUSED_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'light', label: 'Light (<1h)' },
+  { value: 'solid', label: 'Solid (1–3h)' },
+  { value: 'deep', label: 'Deep (3h+)' }
+] as const
+
+// Persistent (not a tooltip) so scoring stays consistent over months.
+const FOCUSED_DEFINITION =
+  'Focused, cognitively demanding self-directed work: studying, problem sets, ' +
+  'research, applications, side projects. Not lecture, email, or routine job tasks.'
+
+const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
+  { value: 'sick', label: CONFOUND_LABELS.sick },
+  { value: 'alcohol', label: CONFOUND_LABELS.alcohol },
+  {
+    value: 'slept_away',
+    label: CONFOUND_LABELS.slept_away,
+    hint: 'Last night, in any bed but your own — including all nights of a trip, not just the first.'
+  },
+  { value: 'travel_day', label: CONFOUND_LABELS.travel_day, hint: '3+ hours in transit today.' },
+  { value: 'caffeine_late', label: CONFOUND_LABELS.caffeine_late, hint: 'Caffeine after ~2pm.' },
+  {
+    value: 'deadline_pressure',
+    label: CONFOUND_LABELS.deadline_pressure,
+    hint: 'Exam or major deadline within 48h.'
+  }
+]
+
 interface DraftEvening {
   gym_actual: GymChoice | null
-  deep_work_actual: number
+  focused_work: FocusedWork | null
+  last_meal_start_time: string | null
+  confounds: Record<ConfoundKey, boolean>
   social: boolean | null
   day_quality: number | null
   note: string
 }
 
-const QUESTIONS = ['gym', 'deep', 'social', 'day_quality', 'note'] as const
-type Step = (typeof QUESTIONS)[number]
+type Step = 'gym' | 'focused' | 'meal' | 'confounds' | 'social' | 'day_quality' | 'note'
+
+const NO_CONFOUNDS = Object.fromEntries(
+  CONFOUND_KEYS.map((k) => [k, false])
+) as Record<ConfoundKey, boolean>
 
 export default function Evening() {
   const navigate = useNavigate()
@@ -45,15 +91,28 @@ export default function Evening() {
   }, [params])
   const isMakeup = targetDate !== todayKey()
 
+  // Steps are keyed to the TARGET date, not today: a make-up for a pre-v2 day
+  // must not ask (or save) the meal/confound questions — writing explicit
+  // `false` flags onto a day from before they were tracked would destroy the
+  // null = "untracked" distinction. Same gate for focused_work before 8/15.
+  const questions = useMemo<Step[]>(() => {
+    const q: Step[] = ['gym']
+    if (targetDate >= FOCUSED_WORK_START) q.push('focused')
+    if (targetDate >= TRACKING_V2_START) q.push('meal', 'confounds')
+    q.push('social', 'day_quality', 'note')
+    return q
+  }, [targetDate])
+
   const [step, setStep] = useState<Step>('gym')
   const [draft, setDraft] = useState<DraftEvening>({
     gym_actual: null,
-    deep_work_actual: 0,
+    focused_work: null,
+    last_meal_start_time: null,
+    confounds: { ...NO_CONFOUNDS },
     social: null,
     day_quality: null,
     note: ''
   })
-  const [morning, setMorning] = useState<Entry | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,10 +123,13 @@ export default function Evening() {
     getEntry(targetDate)
       .then((e) => {
         if (cancelled || !e) return
-        setMorning(e)
         setDraft((d) => ({
           gym_actual: e.gym_actual ?? e.gym_intention ?? d.gym_actual,
-          deep_work_actual: e.deep_work_actual ?? d.deep_work_actual,
+          focused_work: e.focused_work ?? d.focused_work,
+          last_meal_start_time: e.last_meal_start_time ?? d.last_meal_start_time,
+          confounds: Object.fromEntries(
+            CONFOUND_KEYS.map((k) => [k, e[k] ?? false])
+          ) as Record<ConfoundKey, boolean>,
           social: e.social ?? d.social,
           day_quality: e.day_quality ?? d.day_quality,
           note: e.note ?? d.note
@@ -77,34 +139,44 @@ export default function Evening() {
     return () => { cancelled = true }
   }, [targetDate])
 
-  const idx = QUESTIONS.indexOf(step)
+  const idx = questions.indexOf(step)
   const canAdvance = isValid(step, draft)
-  const isLast = step === 'note'
+  const isLast = idx === questions.length - 1
 
   function next() {
     if (!canAdvance) return
-    if (!isLast) setStep(QUESTIONS[idx + 1])
+    if (!isLast) setStep(questions[idx + 1])
     else void submit()
   }
   function back() {
     // First question's back button returns to the dashboard so the user is
     // never trapped inside the check-in flow.
     if (idx === 0) navigate('/')
-    else setStep(QUESTIONS[idx - 1])
+    else setStep(questions[idx - 1])
   }
 
   async function submit() {
     setSubmitting(true)
     setError(null)
     try {
-      await upsertEntry({
+      const patch: EntryPatch = {
         date: targetDate,
         gym_actual: draft.gym_actual,
-        deep_work_actual: draft.deep_work_actual,
         social: draft.social,
         day_quality: draft.day_quality,
         note: draft.note.trim() || null
-      })
+      }
+      if (targetDate >= TRACKING_V2_START) {
+        patch.last_meal_start_time = draft.last_meal_start_time
+        // Explicit true/false for every flag: tapping past the screen means
+        // "tracked, nothing unusual", which the analysis must be able to tell
+        // apart from the pre-v2 nulls.
+        for (const k of CONFOUND_KEYS) patch[k] = draft.confounds[k]
+      }
+      if (targetDate >= FOCUSED_WORK_START) {
+        patch.focused_work = draft.focused_work
+      }
+      await upsertEntry(patch)
       navigate('/')
     } catch (err) {
       console.error(err)
@@ -121,17 +193,12 @@ export default function Evening() {
     <main className="morning">
       <header className="morning__header">
         <span className="morning__date">{headerLabel}</span>
-        <ProgressDots total={QUESTIONS.length} current={idx} />
+        <ProgressDots total={questions.length} current={idx} />
       </header>
 
       <div className="morning__stage">
         <AnimatePresence mode="wait">
-          <StepView
-            step={step}
-            draft={draft}
-            setDraft={setDraft}
-            morningTarget={morning?.deep_work_target ?? null}
-          />
+          <StepView step={step} draft={draft} setDraft={setDraft} />
         </AnimatePresence>
       </div>
 
@@ -162,13 +229,11 @@ export default function Evening() {
 function StepView({
   step,
   draft,
-  setDraft,
-  morningTarget
+  setDraft
 }: {
   step: Step
   draft: DraftEvening
   setDraft: (d: DraftEvening) => void
-  morningTarget: number | null
 }) {
   if (step === 'gym') {
     return (
@@ -186,20 +251,54 @@ function StepView({
       </QuestionCard>
     )
   }
-  if (step === 'deep') {
+  if (step === 'focused') {
     return (
       <QuestionCard
-        stepKey="deep"
-        question="How much deep work?"
-        hint={morningTarget !== null ? `Target was ${morningTarget}h.` : undefined}
+        stepKey="focused"
+        question="Focused work today?"
+        hint={FOCUSED_DEFINITION}
       >
-        <NumberStepper
-          ariaLabel="Deep work actual hours"
-          value={draft.deep_work_actual}
-          onChange={(v) => setDraft({ ...draft, deep_work_actual: v })}
-          min={0}
-          max={12}
-          step={0.5}
+        <PillGroup
+          ariaLabel="Focused work"
+          options={FOCUSED_OPTIONS}
+          value={draft.focused_work}
+          onChange={(v) => setDraft({ ...draft, focused_work: v })}
+        />
+      </QuestionCard>
+    )
+  }
+  if (step === 'meal') {
+    return (
+      <QuestionCard
+        stepKey="meal"
+        question="When did you start your last meal?"
+        hint="The time you started eating — not when you finished."
+      >
+        <TimeInput
+          ariaLabel="Last meal start time"
+          value={draft.last_meal_start_time}
+          onChange={(v) => setDraft({ ...draft, last_meal_start_time: v })}
+        />
+      </QuestionCard>
+    )
+  }
+  if (step === 'confounds') {
+    return (
+      <QuestionCard
+        stepKey="confounds"
+        question="Anything unusual?"
+        hint="Tap any that apply — tapping none is a normal day."
+      >
+        <ToggleChipGroup
+          ariaLabel="Confounding events"
+          options={CONFOUND_OPTIONS}
+          selected={CONFOUND_KEYS.filter((k) => draft.confounds[k])}
+          onToggle={(k) =>
+            setDraft({
+              ...draft,
+              confounds: { ...draft.confounds, [k]: !draft.confounds[k] }
+            })
+          }
         />
       </QuestionCard>
     )
@@ -246,8 +345,12 @@ function isValid(step: Step, d: DraftEvening): boolean {
   switch (step) {
     case 'gym':
       return d.gym_actual !== null
-    case 'deep':
-      return d.deep_work_actual >= 0
+    case 'focused':
+      return d.focused_work !== null
+    case 'meal':
+      return !!d.last_meal_start_time
+    case 'confounds':
+      return true // no selection = a normal day; a single tap moves past
     case 'social':
       return d.social !== null
     case 'day_quality':

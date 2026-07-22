@@ -1,8 +1,8 @@
 # Ember
 
-A small, private daily journal for tracking sleep, focus, gym, and social time.
-Single-user PWA. Lives behind Cloudflare Access. Built with React + Vite, Supabase,
-and the Claude API.
+A small, private daily journal for tracking sleep, gym, focused work, social
+time, meal timing, confounding events, and screen time. Single-user PWA. Lives
+behind Cloudflare Access. Built with React + Vite, Supabase, and the Claude API.
 
 ## Stack
 
@@ -99,8 +99,19 @@ create table public.push_settings (
 insert into public.push_settings (id) values (1) on conflict do nothing;
 ```
 
-Since the app sits behind Cloudflare Access (single user), RLS isn't required.
-If you ever expose it more broadly, add a policy keyed on `auth.uid()`.
+Then run the two migration files in [supabase/](supabase/) — both are idempotent
+and safe to re-run:
+
+- `supabase/finance_migration.sql` — the `finance_*` tables (see docs/FINANCE.md)
+- `supabase/tracking_v2_migration.sql` — tracking v2 (July 2026): confound
+  flags, `focused_work`, `last_meal_start_time`, the `context_periods` and
+  `screen_time` tables, and the weekly-push columns on `push_settings`. Deep
+  work was retired at the same time — its columns and historical data stay in
+  the DB and are viewable on the History page.
+
+RLS is enabled on every table; the SPA's publishable key authenticates as
+`anon` and needs explicit SELECT + INSERT + UPDATE policies per table (the
+migrations create them). See CLAUDE.md for the two-key model.
 
 ## Deploy (Cloudflare Pages)
 
@@ -116,22 +127,26 @@ If you ever expose it more broadly, add a policy keyed on `auth.uid()`.
 
 ```
 functions/api/claude.ts   Pages Function — Anthropic proxy (key stays here)
-src/lib/                  supabase, entries, claude, date, streaks helpers
+src/lib/                  supabase, entries, screenTime, contextPeriods,
+                          promptData, claude, date, streaks helpers
 src/components/           QuestionCard, ProgressDots, StarRating, PillGroup,
-                          TimeInput, NumberStepper, NoteInput, StatCard,
-                          DotCalendar, DeepWorkBarChart, SleepTrendChart,
-                          SocialFrequency
-src/pages/                Morning, Dashboard, Evening, Patterns
+                          ToggleChipGroup, TimeInput, NumberStepper, NoteInput,
+                          StatCard, DotCalendar, SleepTrendChart,
+                          SocialFrequency, ContextPeriodModal
+src/pages/                Morning, Dashboard, Evening, Patterns, History,
+                          ScreenTime, Settings, Finance
 src/styles/               theme.css (palette tokens), global.css
 ```
 
 ## Navigation
 
-- `/` — Morning check-in (skips straight to `/dashboard` if today is already started)
-- `/dashboard` — streaks, dot calendar, weekly deep-work bars, sleep trend, social row
-- `/evening` — reached from the dashboard; updates today's row in place
+- `/` — dashboard: check-in cards, gym streak, dot calendar, sleep trend, social row
+- `/morning` — morning check-in (bedtime, wake, sleep quality, gym intention)
+- `/evening` — evening check-in; accepts `?date=YYYY-MM-DD` to back-fill a missed day
+- `/history` — read-only look-back over every day, incl. legacy deep-work data and confound badges
+- `/screentime` — weekly batch entry of daily screen-time values (Sunday nights)
 - `/patterns` — on-demand 30-day analysis from Claude, streamed in
-- `/settings` — reminder times, push subscription toggle
+- `/settings` — reminder times, push subscription toggle, gym rest budget, location
 
 ## Icons
 
@@ -144,8 +159,10 @@ drop a 180×180 PNG at `public/apple-touch-icon.png` and uncomment the
 Daily reminders are sent by a separate Cloudflare Worker in [worker/](worker/)
 that runs on a 5-minute cron, checks current local time against
 `push_settings.{morning,evening}_time`, and only fires if the matching
-check-in fields for today are still empty. Notifications work on iPhone only
-after the user does **Share → Add to Home Screen** (iOS 16.4+).
+check-in fields for today are still empty. Sundays add a third slot at
+`weekly_time` reminding you to log last week's screen time — skipped if any
+day of that week is already in `screen_time`. Notifications work on iPhone
+only after the user does **Share → Add to Home Screen** (iOS 16.4+).
 
 One-time setup:
 
@@ -163,11 +180,12 @@ npx wrangler secret put VAPID_PUBLIC_KEY      # paste public
 npx wrangler secret put VAPID_PRIVATE_KEY     # paste private
 npx wrangler secret put VAPID_SUBJECT         # mailto:you@example.com
 npx wrangler secret put SUPABASE_URL
-npx wrangler secret put SUPABASE_KEY          # anon is fine, no RLS
+npx wrangler secret put SUPABASE_KEY          # the sb_secret_ key — bypasses RLS
 npx wrangler deploy
 ```
 
-To manually fire a notification (for testing): `curl https://<worker-domain>/?force=morning`.
+To manually fire a notification (for testing):
+`curl https://<worker-domain>/?force=morning` (also `evening`, `weekly`, `finance`).
 
 ## External data ingestion (Apple Health)
 

@@ -1,0 +1,128 @@
+.history {
+  max-width: 720px;
+  margin: 0 auto;
+  padding:
+    max(44px, calc(env(safe-area-inset-top) + 16px))
+    max(20px, env(safe-area-inset-right))
+    max(56px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history__header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.history__back {
+  color: var(--amber);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.history__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history__item {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.history__rowBtn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.history__rowMain {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.history__date {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.history__summary {
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.history__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.history__flag {
+  background: var(--terracotta-soft);
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.history__detail {
+  border-top: 1px solid var(--hairline);
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history__detailRow {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.history__detailLabel {
+  color: var(--muted);
+  flex: 0 0 110px;
+}
+
+.history__detailValue {
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history__empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 40px 0;
+}

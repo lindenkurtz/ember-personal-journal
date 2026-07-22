@@ -14,27 +14,28 @@ export interface Env {
   PLAID_ENV?: string
 }
 
-type Slot = 'morning' | 'evening' | 'finance'
+type Slot = 'morning' | 'evening' | 'weekly' | 'finance'
 
 interface Settings {
   enabled: boolean
   morning_time: string
   evening_time: string
+  weekly_time: string
   timezone: string
   last_morning_sent: string | null
   last_evening_sent: string | null
+  last_weekly_sent: string | null
   latitude: number | null
   longitude: number | null
 }
 
+// deep_work_* columns retired July 2026 — the worker no longer selects them.
 interface Entry {
   date: string
   bedtime: string | null
   sleep_quality: number | null
   gym_actual: string | null
-  deep_work_actual: number | null
-  deep_work_planned: string | null
-  deep_work_plan_note: string | null
+  day_quality: number | null
   weather_temp_f: number | null
 }
 
@@ -44,7 +45,7 @@ export default {
     ctx.waitUntil(tick(env))
     ctx.waitUntil(financeTick(env).catch((err) => console.error('[finance] error', err)))
   },
-  // Manual trigger for testing: `curl https://<worker>/?force=morning|finance`
+  // Manual trigger for testing: `curl https://<worker>/?force=morning|evening|weekly|finance`
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
     const force = url.searchParams.get('force') as Slot | null
@@ -103,14 +104,14 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
 
   const { data: settingsRow, error: settingsErr } = await supabase
     .from('push_settings')
-    .select('enabled, morning_time, evening_time, timezone, last_morning_sent, last_evening_sent, latitude, longitude')
+    .select('enabled, morning_time, evening_time, weekly_time, timezone, last_morning_sent, last_evening_sent, last_weekly_sent, latitude, longitude')
     .eq('id', 1)
     .maybeSingle()
   if (settingsErr) throw settingsErr
   const settings = (settingsRow as Settings | null)
   if (!settings || !settings.enabled) return
 
-  const { dateKey, hhmm } = localNow(settings.timezone)
+  const { dateKey, hhmm, weekday } = localNow(settings.timezone)
 
   const todayEntry = await getEntry(supabase, dateKey)
 
@@ -133,6 +134,9 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
   if (force === 'evening' || dueEvening(settings, hhmm, dateKey, todayEntry)) {
     await fire(supabase, env, 'evening', dateKey)
   }
+  if (force === 'weekly' || (await dueWeekly(supabase, settings, hhmm, dateKey, weekday))) {
+    await fire(supabase, env, 'weekly', dateKey)
+  }
 }
 
 function dueMorning(s: Settings, hhmm: string, dateKey: string, e: Entry | null): boolean {
@@ -145,13 +149,38 @@ function dueMorning(s: Settings, hhmm: string, dateKey: string, e: Entry | null)
 function dueEvening(s: Settings, hhmm: string, dateKey: string, e: Entry | null): boolean {
   if (s.last_evening_sent === dateKey) return false
   if (hhmm < s.evening_time) return false
-  return !(e && e.deep_work_actual !== null && e.gym_actual !== null)
+  // Evening check-in is "done" when gym and day quality are present (deep work
+  // retired July 2026). Kept in lockstep with isEveningDone in the SPA.
+  return !(e && e.gym_actual !== null && e.day_quality !== null)
+}
+
+// Weekly screen-time reminder: Sunday at weekly_time. Smart-skips when any day
+// of the target week (Mon..this Sunday) is already logged; like the daily
+// slots, a skip does NOT write last_weekly_sent.
+async function dueWeekly(
+  supabase: SupabaseClient,
+  s: Settings,
+  hhmm: string,
+  dateKey: string,
+  weekday: string
+): Promise<boolean> {
+  if (weekday !== 'Sunday') return false
+  if (s.last_weekly_sent === dateKey) return false
+  if (hhmm < s.weekly_time) return false
+  const { data, error } = await supabase
+    .from('screen_time')
+    .select('date')
+    .gte('date', addDaysKey(dateKey, -6))
+    .lte('date', dateKey)
+    .limit(1)
+  if (error) throw error
+  return (data ?? []).length === 0
 }
 
 async function getEntry(supabase: SupabaseClient, date: string): Promise<Entry | null> {
   const { data, error } = await supabase
     .from('entries')
-    .select('date, bedtime, sleep_quality, gym_actual, deep_work_actual, weather_temp_f')
+    .select('date, bedtime, sleep_quality, gym_actual, day_quality, weather_temp_f')
     .eq('date', date)
     .maybeSingle()
   if (error) throw error
@@ -195,7 +224,10 @@ async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: str
   }
 
   // Mark this slot sent for today so subsequent ticks don't re-fire.
-  const column = slot === 'morning' ? 'last_morning_sent' : 'last_evening_sent'
+  const column =
+    slot === 'morning' ? 'last_morning_sent'
+    : slot === 'weekly' ? 'last_weekly_sent'
+    : 'last_evening_sent'
   await supabase.from('push_settings').update({ [column]: dateKey }).eq('id', 1)
 }
 
@@ -239,6 +271,14 @@ function payloadFor(slot: Slot, dateKey: string): { title: string; body: string;
       url: '/morning'
     }
   }
+  if (slot === 'weekly') {
+    return {
+      title: 'Screen time',
+      body: "Log last week's phone and computer time.",
+      tag: 'weekly',
+      url: '/screentime'
+    }
+  }
   // Pin the firing day into the URL. Without it, clicking an evening push after
   // midnight lands on todayKey() — the next day — and back-fills the wrong row.
   return {
@@ -252,7 +292,7 @@ function payloadFor(slot: Slot, dateKey: string): { title: string; body: string;
 // Compute current date and HH:MM in the user's IANA timezone. Intl handles
 // DST automatically — that's the whole reason we don't bake the offset into
 // the cron expression.
-function localNow(timeZone: string): { dateKey: string; hhmm: string } {
+function localNow(timeZone: string): { dateKey: string; hhmm: string; weekday: string } {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     hour12: false,
@@ -260,7 +300,8 @@ function localNow(timeZone: string): { dateKey: string; hhmm: string } {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    weekday: 'long' // 'long' avoids locale abbreviation quirks like 'Sun.'
   })
   const parts = fmt.formatToParts(new Date())
   const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? ''
@@ -269,6 +310,15 @@ function localNow(timeZone: string): { dateKey: string; hhmm: string } {
   const hour = hourRaw === '24' ? '00' : hourRaw
   return {
     dateKey: `${get('year')}-${get('month')}-${get('day')}`,
-    hhmm: `${hour}:${get('minute')}`
+    hhmm: `${hour}:${get('minute')}`,
+    weekday: get('weekday')
   }
+}
+
+// UTC math on bare YYYY-MM-DD keys — no timezone or DST involvement, and no
+// date-fns dependency in the worker.
+function addDaysKey(key: string, n: number): string {
+  const d = new Date(key + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
 }

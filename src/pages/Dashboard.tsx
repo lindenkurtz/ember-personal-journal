@@ -2,16 +2,20 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, parseISO, format } from 'date-fns'
 import { Entry, getRange, getEntry, getAllEntries } from '../lib/entries'
-import { gymStreak, restDaysLeft, deepWorkStreak, deepWorkRestDaysLeft, bestGymStreak, bestDeepWorkStreak } from '../lib/streaks'
+import { gymStreak, restDaysLeft, bestGymStreak } from '../lib/streaks'
 import { getSettings, PushSettings } from '../lib/settings'
-import { prettyDay, todayKey, dayKey } from '../lib/date'
+import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
+import { listContextPeriods, periodForDate, ContextPeriod } from '../lib/contextPeriods'
+import { prettyDay, todayKey, dayKey, screenTimeWeekStart, addDaysKey } from '../lib/date'
 import StatCard from '../components/StatCard'
 import CheckInCard from '../components/CheckInCard'
 import DotCalendar from '../components/DotCalendar'
-import DeepWorkBarChart from '../components/DeepWorkBarChart'
 import SleepTrendChart from '../components/SleepTrendChart'
 import SocialFrequency from '../components/SocialFrequency'
+import ContextPeriodModal from '../components/ContextPeriodModal'
 import './Dashboard.css'
+
+const CTX_DISMISS_KEY = 'ember:ctxDismissed'
 
 export default function Dashboard() {
   const [entries, setEntries] = useState<Entry[]>([])
@@ -19,19 +23,41 @@ export default function Dashboard() {
   const [today, setToday] = useState<Entry | null>(null)
   const [yesterday, setYesterday] = useState<Entry | null>(null)
   const [settings, setSettings] = useState<PushSettings | null>(null)
+  // null = fetch failed (offline, table missing) — degrade by hiding the
+  // banner/nag rather than falsely claiming nothing is set/logged.
+  const [periods, setPeriods] = useState<ContextPeriod[] | null>(null)
+  const [screenWeek, setScreenWeek] = useState<ScreenTimeRow[] | null>(null)
+  const [showCtxEditor, setShowCtxEditor] = useState(false)
+  const [ctxDismissed, setCtxDismissed] = useState(
+    () => localStorage.getItem(CTX_DISMISS_KEY) === todayKey()
+  )
   const [loading, setLoading] = useState(true)
+
+  const stWeekStart = screenTimeWeekStart()
+  const stWeekEnd = addDaysKey(stWeekStart, 6)
 
   useEffect(() => {
     let cancelled = false
     const yKey = dayKey(subDays(new Date(), 1))
-    Promise.all([getRange(30), getEntry(todayKey()), getEntry(yKey), getSettings(), getAllEntries()])
-      .then(([range, t, y, s, all]) => {
+    const wk = screenTimeWeekStart()
+    Promise.all([
+      getRange(30),
+      getEntry(todayKey()),
+      getEntry(yKey),
+      getSettings(),
+      getAllEntries(),
+      listContextPeriods().catch(() => null),
+      getScreenTimeRange(wk, addDaysKey(wk, 6)).catch(() => null)
+    ])
+      .then(([range, t, y, s, all, ps, st]) => {
         if (cancelled) return
         setEntries(range)
         setAllEntries(all)
         setToday(t)
         setYesterday(y)
         setSettings(s)
+        setPeriods(ps)
+        setScreenWeek(st)
       })
       .catch((err) => console.error('[dashboard]', err))
       .finally(() => !cancelled && setLoading(false))
@@ -42,12 +68,7 @@ export default function Dashboard() {
   const history = settings?.rest_budget_history
   const gym = gymStreak(allEntries, restBudget, history)
   const restLeft = restDaysLeft(allEntries, restBudget, history)
-  const dwBudget = settings?.deep_work_rest_budget ?? 2
-  const dwHistory = settings?.deep_work_rest_budget_history
-  const dw = deepWorkStreak(allEntries, dwBudget, dwHistory)
-  const dwRestLeft = deepWorkRestDaysLeft(allEntries, dwBudget, dwHistory)
   const bestGym = bestGymStreak(allEntries, restBudget, history)
-  const bestDw = bestDeepWorkStreak(allEntries, dwBudget, dwHistory)
 
   const morningDone = isMorningDone(today)
   const eveningDone = isEveningDone(today)
@@ -55,6 +76,18 @@ export default function Dashboard() {
   // never got filled. If the whole day was skipped (no row at all), we don't
   // nudge — that's a normal off day, not a forgotten evening.
   const missedYesterday = !!yesterday && isMorningDone(yesterday) && !isEveningDone(yesterday)
+
+  // Weekly screen-time nag: only when the target week has ZERO rows. Once any
+  // day is saved the week counts as logged — partial weeks are intentional and
+  // must never nag forever.
+  const screenTimeMissing = screenWeek !== null && screenWeek.length === 0
+  const noContextToday =
+    !loading && periods !== null && !periodForDate(periods, todayKey()) && !ctxDismissed
+
+  function dismissCtx() {
+    localStorage.setItem(CTX_DISMISS_KEY, todayKey())
+    setCtxDismissed(true)
+  }
 
   return (
     <main className="dash">
@@ -66,6 +99,7 @@ export default function Dashboard() {
         <div className="dash__headerLinks">
           <Link to="/finance" className="dash__link">Finance</Link>
           <Link to="/patterns" className="dash__link">Patterns</Link>
+          <Link to="/history" className="dash__link">History</Link>
           <Link to="/settings" className="dash__iconLink" aria-label="Settings">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -74,6 +108,16 @@ export default function Dashboard() {
           </Link>
         </div>
       </header>
+
+      {noContextToday && (
+        <div className="dash__ctxBanner">
+          <span>No context set for today.</span>
+          <div className="dash__ctxActions">
+            <button className="dash__ctxSet" onClick={() => setShowCtxEditor(true)}>Set</button>
+            <button className="dash__ctxDismiss" aria-label="Dismiss" onClick={dismissCtx}>×</button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="muted" style={{ textAlign: 'center', padding: '40px 0' }}>Loading…</p>
@@ -90,22 +134,31 @@ export default function Dashboard() {
               />
             )}
             <CheckInCard
-              title={morningDone ? 'Morning check-in' : 'Morning check-in'}
-              summary={morningDone ? morningSummary(today!) : 'Bedtime, sleep, gym, deep work plan.'}
+              title="Morning check-in"
+              summary={morningDone ? morningSummary(today!) : 'Bedtime, sleep, gym.'}
               status={morningDone ? 'done' : 'pending'}
               variant={morningDone ? 'default' : 'cta'}
               to="/morning"
             />
             <CheckInCard
               title="Evening check-in"
-              summary={eveningDone ? eveningSummary(today!) : 'Gym actual, deep work, social, note.'}
+              summary={eveningDone ? eveningSummary(today!) : 'Gym, meal time, social, how the day went.'}
               status={eveningDone ? 'done' : 'pending'}
               variant={eveningDone ? 'default' : 'cta'}
               to="/evening"
             />
+            {screenTimeMissing && (
+              <CheckInCard
+                title="Screen time — last week"
+                summary={`${format(parseISO(stWeekStart), 'MMM d')} – ${format(parseISO(stWeekEnd), 'MMM d')} still unlogged.`}
+                status="missed"
+                variant="warn"
+                to="/screentime"
+              />
+            )}
           </section>
 
-          <section className="dash__stats">
+          <section className="dash__stats dash__stats--single">
             <StatCard
               label="Gym streak"
               value={<><span className="dash__num">{gym}</span> <span className="dash__unit">{gym === 1 ? 'day' : 'days'}</span></>}
@@ -114,14 +167,6 @@ export default function Dashboard() {
                 : `${restLeft} rest ${restLeft === 1 ? 'day' : 'days'} left this week`}
               best={bestGym > 0 ? bestGym : undefined}
               variant="glow"
-            />
-            <StatCard
-              label="Deep work streak"
-              value={<><span className="dash__num">{dw}</span> <span className="dash__unit">{dw === 1 ? 'day' : 'days'}</span></>}
-              sublabel={dwRestLeft === 0
-                ? 'budget reached this week'
-                : `${dwRestLeft} rest ${dwRestLeft === 1 ? 'day' : 'days'} left this week`}
-              best={bestDw > 0 ? bestDw : undefined}
             />
           </section>
 
@@ -135,14 +180,6 @@ export default function Dashboard() {
               label="Gym last 30 days"
               filled={(e) => e?.gym_actual === 'yes'}
             />
-          </section>
-
-          <section className="dash__card">
-            <div className="dash__cardHeader">
-              <h2>Deep work this week</h2>
-              <span className="muted">hours logged</span>
-            </div>
-            <DeepWorkBarChart entries={entries} />
           </section>
 
           <section className="dash__card">
@@ -161,31 +198,39 @@ export default function Dashboard() {
           </section>
         </>
       )}
+
+      {showCtxEditor && (
+        <ContextPeriodModal
+          periods={periods ?? []}
+          onClose={() => setShowCtxEditor(false)}
+          onChanged={(next) => setPeriods(next)}
+        />
+      )}
     </main>
   )
 }
 
+// Kept in lockstep with the worker's dueMorning/dueEvening smart-skips
+// (worker/src/index.ts) — deep_work fields retired July 2026.
 function isMorningDone(e: Entry | null): boolean {
-  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null && e.deep_work_planned !== null
+  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null
 }
 
 function isEveningDone(e: Entry | null): boolean {
-  return !!e && e.gym_actual !== null && e.deep_work_actual !== null && e.social !== null
+  return !!e && e.gym_actual !== null && e.day_quality !== null
 }
 
 function morningSummary(e: Entry): string {
   const parts: string[] = []
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
   if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
-  if (e.deep_work_planned === 'yes') parts.push('deep work yes')
-  else if (e.deep_work_planned === 'no') parts.push('deep work no')
   return parts.join(' · ')
 }
 
 function eveningSummary(e: Entry): string {
   const parts: string[] = []
   if (e.gym_actual) parts.push(`gym ${e.gym_actual}`)
-  if (e.deep_work_actual !== null) parts.push(`${e.deep_work_actual}h done`)
+  if (e.day_quality) parts.push(`${'★'.repeat(e.day_quality)} day`)
   if (e.social !== null) parts.push(e.social ? 'social' : 'solo')
   return parts.join(' · ')
 }

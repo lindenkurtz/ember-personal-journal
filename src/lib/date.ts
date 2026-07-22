@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format, parseISO, startOfWeek, subDays } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek, subDays } from 'date-fns'
 
 /** ISO date key (YYYY-MM-DD) for "today" in the user's local timezone. */
 export function todayKey(d: Date = new Date()): string {
@@ -29,6 +29,21 @@ export function prettyDay(d: Date = new Date()): string {
 /** Monday-of-the-week ISO date key for a given YYYY-MM-DD. Used to bucket entries into calendar weeks. */
 export function weekStartKey(dateKey: string): string {
   return dayKey(startOfWeek(parseISO(dateKey), { weekStartsOn: 1 }))
+}
+
+/** `key` shifted by `n` calendar days (negative allowed). */
+export function addDaysKey(key: string, n: number): string {
+  return dayKey(addDays(parseISO(key), n))
+}
+
+/**
+ * Monday key of the screen-time entry week: the week ending on the most recent
+ * Sunday. On a Sunday that's the current week (entry happens Sunday night, per
+ * iOS Screen Time's Mon–Sun week); any other day it's last week.
+ */
+export function screenTimeWeekStart(today: Date = new Date()): string {
+  const wk = weekStartKey(dayKey(today))
+  return today.getDay() === 0 ? wk : addDaysKey(wk, -7)
 }
 
 /** Year-month key (YYYY-MM) for a YYYY-MM-DD, or for "now" with no arg. */

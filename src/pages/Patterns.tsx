@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getRange, Entry } from '../lib/entries'
+import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
+import { listContextPeriods, ContextPeriod } from '../lib/contextPeriods'
+import { buildCompactRows, contextHeader, FIELD_LEGEND, SPARSE_NOTE } from '../lib/promptData'
+import { lastNDays, todayKey } from '../lib/date'
 import { streamClaude } from '../lib/claude'
 import './Patterns.css'
 
@@ -8,9 +12,11 @@ const SYSTEM_PROMPT = [
   "You are a thoughtful, honest journal companion analyzing the user's last 30 days of daily entries.",
   "Write in second person, conversational tone — like a friend who pays attention.",
   "Day quality (dq, 1–5) is the PRIMARY TARGET. Focus first on what predicts higher-vs-lower day quality",
-  "scores — sleep, gym, deep work, social, weather, and passive signals. Also surface: correlations",
-  "between the inputs, trends across the month, consistency gaps between intentions and actuals, and",
-  "weekday vs weekend patterns.",
+  "scores — sleep, gym, focused work, meal timing, social time, screen time, weather, and passive signals.",
+  "Also surface: correlations between the inputs, trends across the month, consistency gaps between",
+  "intentions and actuals, and weekday vs weekend patterns.",
+  "Confound flags (illness, alcohol, sleeping away, travel, late caffeine, deadlines) mark rare but",
+  "distorting days — use them to explain outliers and discount those days, never as goals in themselves.",
   "Be specific — cite actual numbers where they help. Be honest — don't soften real misses.",
   "sleep_hours is objective Apple Watch data while sleep_quality is the user's subjective rating — both are useful, and discrepancies between them (e.g. long sleep but low quality, or short sleep but high quality) are worth surfacing.",
   "Don't list bullets unless it's genuinely the clearest format. Prefer 3–5 short paragraphs.",
@@ -35,10 +41,16 @@ export default function Patterns() {
         setRunning(false)
         return
       }
+      // Screen time and context periods ride along as predictors/grouping;
+      // either failing must not block the analysis.
+      const [screen, periods] = await Promise.all([
+        getScreenTimeRange(lastNDays(30)[0], todayKey()).catch(() => [] as ScreenTimeRow[]),
+        listContextPeriods().catch(() => [] as ContextPeriod[])
+      ])
       await streamClaude(
         {
           system: SYSTEM_PROMPT,
-          prompt: buildPrompt(entries),
+          prompt: buildPrompt(entries, screen, periods),
           max_tokens: 800
         },
         (chunk) => setText((t) => t + chunk)
@@ -88,43 +100,15 @@ export default function Patterns() {
   )
 }
 
-function buildPrompt(entries: Entry[]): string {
-  const rows = entries.map((e) => ({
-    d: e.date,
-    bed: e.bedtime,
-    wake: e.wake_time,
-    sleep: e.sleep_quality,
-    sleep_h: e.sleep_hours,
-    dq: e.day_quality,
-    gym_i: e.gym_intention,
-    gym_a: e.gym_actual,
-    dw_p: e.deep_work_planned,
-    dw_a: e.deep_work_actual,
-    soc: e.social,
-    hrv: e.hrv_avg,
-    rhr: e.resting_hr,
-    steps: e.steps,
-    tempF: e.weather_temp_f,
-    wcode: e.weather_code,
-    note: e.note
-  }))
-  return [
+function buildPrompt(entries: Entry[], screen: ScreenTimeRow[], periods: ContextPeriod[]): string {
+  const rows = buildCompactRows(entries, new Map(screen.map((r) => [r.date, r])), { notes: true })
+  const sections = [
     `Daily entries for the last ${entries.length} days (oldest first):`,
     JSON.stringify(rows),
-    "",
-    "Field key:",
-    "  bed = bedtime, wake = wake time (both 'HH:MM' local, both user-entered, mirror sleep_h),",
-    "  sleep = sleep quality 1–5 (subjective),",
-    "  sleep_h = sleep duration in hours from Apple Watch (objective, sparsely populated, often null),",
-    "  dq = day quality 1–5 (PRIMARY TARGET — find what predicts this),",
-    "  gym_i = morning intention, gym_a = actual,",
-    "  dw_p = morning intention for deep work ('yes'|'no'), dw_a = actual hours logged, soc = had social time,",
-    "  hrv = average HRV (ms), rhr = resting heart rate (bpm), steps = daily step count,",
-    "  tempF = outside temp at morning check-in (°F), wcode = Open-Meteo WMO weather code,",
-    "  note = freetext notes about the day (may include trip-ups, wins, or general context).",
-    "",
-    "HRV, resting heart rate, steps, sleep_h, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
-    "",
-    "Write the analysis."
-  ].join('\n')
+    ''
+  ]
+  const ctx = contextHeader(periods)
+  if (ctx) sections.push(ctx, '')
+  sections.push(FIELD_LEGEND, '', SPARSE_NOTE, '', 'Write the analysis.')
+  return sections.join('\n')
 }

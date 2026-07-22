@@ -1,0 +1,145 @@
+.st {
+  max-width: 560px;
+  margin: 0 auto;
+  padding:
+    max(44px, calc(env(safe-area-inset-top) + 16px))
+    max(20px, env(safe-area-inset-right))
+    max(56px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.st__header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.st__back {
+  color: var(--amber);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.st__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.st__weekNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.st__weekBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--card-soft);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.st__weekBtn:disabled {
+  opacity: 0.35;
+}
+
+.st__weekLabel {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.st__hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.st__hint strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.st__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.st__gridRow {
+  display: grid;
+  grid-template-columns: 52px 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.st__colLabel {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.st__day {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st__cell {
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px;
+  color: var(--text);
+  font-size: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+  min-width: 0;
+  outline: none;
+}
+
+.st__cell:focus {
+  border-color: var(--amber);
+}
+
+.st__cell::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.st__error {
+  color: var(--terracotta);
+  font-size: 13px;
+  text-align: center;
+  margin: 0;
+}
+
+.st__save {
+  background: var(--amber-soft);
+  border: 1px solid var(--terracotta);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 20px;
+}
+
+.st__save:disabled {
+  opacity: 0.5;
+}

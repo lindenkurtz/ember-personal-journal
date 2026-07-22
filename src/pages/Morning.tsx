@@ -7,9 +7,12 @@ import StarRating from '../components/StarRating'
 import PillGroup from '../components/PillGroup'
 import TimeInput from '../components/TimeInput'
 import { upsertEntry, getEntry, getRange, GymChoice, Entry } from '../lib/entries'
+import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
+import { listContextPeriods, ContextPeriod } from '../lib/contextPeriods'
+import { buildCompactRows, contextHeader, FIELD_LEGEND, SPARSE_NOTE } from '../lib/promptData'
 import { getSettings, updateSettings } from '../lib/settings'
 import { callClaude } from '../lib/claude'
-import { todayKey, prettyDay } from '../lib/date'
+import { todayKey, prettyDay, lastNDays } from '../lib/date'
 import './Morning.css'
 
 const GYM_OPTIONS = [
@@ -17,18 +20,14 @@ const GYM_OPTIONS = [
   { value: 'no', label: 'No' }
 ] as const
 
-type DeepWorkPlanned = 'yes' | 'no'
-
 interface DraftMorning {
   bedtime: string | null
   wake_time: string | null
   sleep_quality: number | null
   gym_intention: GymChoice | null
-  deep_work_planned: DeepWorkPlanned | null
-  deep_work_plan_note: string
 }
 
-const QUESTIONS = ['bedtime', 'wake', 'rating', 'gym', 'focus'] as const
+const QUESTIONS = ['bedtime', 'wake', 'rating', 'gym'] as const
 type Step = (typeof QUESTIONS)[number]
 
 export default function Morning() {
@@ -38,9 +37,7 @@ export default function Morning() {
     bedtime: null,
     wake_time: null,
     sleep_quality: null,
-    gym_intention: null,
-    deep_work_planned: null,
-    deep_work_plan_note: ''
+    gym_intention: null
   })
   const [submitting, setSubmitting] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -58,9 +55,7 @@ export default function Morning() {
           bedtime: e.bedtime ?? d.bedtime,
           wake_time: e.wake_time ?? d.wake_time,
           sleep_quality: e.sleep_quality ?? d.sleep_quality,
-          gym_intention: e.gym_intention ?? d.gym_intention,
-          deep_work_planned: (e.deep_work_planned as DeepWorkPlanned | null) ?? d.deep_work_planned,
-          deep_work_plan_note: e.deep_work_plan_note ?? d.deep_work_plan_note
+          gym_intention: e.gym_intention ?? d.gym_intention
         }))
       })
       .catch(() => { /* offline / unconfigured — let the user fill manually */ })
@@ -110,7 +105,7 @@ export default function Morning() {
 
   const idx = QUESTIONS.indexOf(step)
   const canAdvance = isValid(step, draft)
-  const isLast = step === 'focus'
+  const isLast = step === 'gym'
 
   function next() {
     if (!canAdvance) return
@@ -134,11 +129,7 @@ export default function Morning() {
         bedtime: draft.bedtime,
         wake_time: draft.wake_time,
         sleep_quality: draft.sleep_quality,
-        gym_intention: draft.gym_intention,
-        deep_work_planned: draft.deep_work_planned,
-        deep_work_plan_note: draft.deep_work_planned === 'yes' && draft.deep_work_plan_note
-          ? draft.deep_work_plan_note
-          : null
+        gym_intention: draft.gym_intention
       })
       setSaved(true)
     } catch (err) {
@@ -154,8 +145,13 @@ export default function Morning() {
     setError(null)
     try {
       const date = todayKey()
-      // Pull last 14 days to ground the nudge in recent context.
-      const recent = await getRange(14).catch(() => [] as Entry[])
+      // Pull last 14 days to ground the nudge in recent context. Screen time
+      // and context periods ride along; either failing must not block the nudge.
+      const [recent, screen, periods] = await Promise.all([
+        getRange(14).catch(() => [] as Entry[]),
+        getScreenTimeRange(lastNDays(14)[0], todayKey()).catch(() => [] as ScreenTimeRow[]),
+        listContextPeriods().catch(() => [] as ContextPeriod[])
+      ])
       const text = await callClaude({
         max_tokens: 180,
         system:
@@ -163,10 +159,10 @@ export default function Morning() {
           "in their recent daily journal. Be warm but honest, specific, and concrete — " +
           "no preamble, no greeting, no sign-off. Speak to the user directly. " +
           "If you notice a pattern (e.g. low sleep correlated with skipped gym, or " +
-          "regularly missing deep work sessions), name it gently. " +
+          "late caffeine showing up before poorly-rated nights), name it gently. " +
           "Only reference facts present in the data you're given; never fabricate " +
           "numbers, durations, or units.",
-        prompt: buildNudgePrompt(recent, { date, ...draft })
+        prompt: buildNudgePrompt(recent, screen, periods, { date, ...draft })
       })
       setNudge(text.trim())
     } catch (err) {
@@ -327,40 +323,14 @@ function Question({
       </QuestionCard>
     )
   }
-  if (step === 'gym') {
-    return (
-      <QuestionCard stepKey="gym" question="Gym today?">
-        <PillGroup
-          ariaLabel="Gym intention"
-          options={GYM_OPTIONS}
-          value={draft.gym_intention}
-          onChange={(v) => setDraft({ ...draft, gym_intention: v })}
-        />
-      </QuestionCard>
-    )
-  }
   return (
-    <QuestionCard
-      stepKey="focus"
-      question="Deep work today?"
-      hint="Will you get a deep work session in?"
-    >
+    <QuestionCard stepKey="gym" question="Gym today?">
       <PillGroup
-        ariaLabel="Deep work intention"
+        ariaLabel="Gym intention"
         options={GYM_OPTIONS}
-        value={draft.deep_work_planned}
-        onChange={(v) => setDraft({ ...draft, deep_work_planned: v as DeepWorkPlanned })}
+        value={draft.gym_intention}
+        onChange={(v) => setDraft({ ...draft, gym_intention: v })}
       />
-      {draft.deep_work_planned === 'yes' && (
-        <input
-          type="text"
-          className="morning__planNote"
-          placeholder="How and when?"
-          value={draft.deep_work_plan_note}
-          onChange={(e) => setDraft({ ...draft, deep_work_plan_note: e.target.value })}
-          aria-label="Deep work plan note"
-        />
-      )}
     </QuestionCard>
   )
 }
@@ -375,70 +345,36 @@ function isValid(step: Step, d: DraftMorning): boolean {
       return d.sleep_quality !== null
     case 'gym':
       return d.gym_intention !== null
-    case 'focus':
-      return d.deep_work_planned !== null
   }
 }
 
 function buildNudgePrompt(
   recent: Entry[],
+  screen: ScreenTimeRow[],
+  periods: ContextPeriod[],
   today: { date: string } & DraftMorning
 ): string {
   // Compact JSON keeps the token cost small while preserving all signal.
-  // The schema header is critical: without it Claude has hallucinated
+  // The schema legend is critical: without it Claude has hallucinated
   // "hours of sleep" from the 1–5 `sleep` quality rating.
-  const history = recent.map((e) => ({
-    d: e.date,
-    bed: e.bedtime,
-    wake: e.wake_time,
-    sleep: e.sleep_quality,
-    sleep_h: e.sleep_hours,
-    dq: e.day_quality,
-    gym_i: e.gym_intention,
-    gym_a: e.gym_actual,
-    dw_p: e.deep_work_planned,
-    dw_a: e.deep_work_actual,
-    soc: e.social,
-    hrv: e.hrv_avg,
-    rhr: e.resting_hr,
-    steps: e.steps,
-    tempF: e.weather_temp_f,
-    wcode: e.weather_code
-  }))
-  return [
-    "Schema (all fields nullable; null means the user didn't log it):",
-    "- d: date (YYYY-MM-DD)",
-    "- bed: bedtime as 'HH:MM' local time the user went to sleep the night before. NOT a duration.",
-    "- wake: wake time as 'HH:MM' local time the user woke up on the row's date. NOT a duration.",
-    "- sleep: self-reported sleep quality, integer 1–5 stars. Subjective rating.",
-    "- sleep_h: objective sleep duration in hours from Apple Watch (passive, sparsely populated, often null). Complements `sleep` — `sleep` is the user's subjective rating, `sleep_h` is measured duration.",
-    "- dq: self-reported day quality, integer 1–5 stars (logged in the evening, so often null for today).",
-    "- gym_i: morning intention for the gym — 'yes' | 'no'",
-    "- gym_a: evening report of whether they actually went — 'yes' | 'no'",
-    "- dw_p: morning intention for deep work — 'yes' | 'no'",
-    "- dw_a: deep-work actually completed in hours (logged in the evening)",
-    "- soc: boolean — did they have meaningful social interaction that day",
-    "- hrv: average heart rate variability in ms (passive, sparsely populated, often null)",
-    "- rhr: resting heart rate in bpm (passive, sparsely populated, often null)",
-    "- steps: total step count for the day (passive, sparsely populated, often null)",
-    "- tempF: current outside temperature in °F at the morning check-in (passive, sparsely populated, often null)",
-    "- wcode: Open-Meteo WMO weather code (passive, sparsely populated, often null)",
-    "",
-    "HRV, resting heart rate, steps, sleep_h, and weather are sparsely populated passive signals. Only draw conclusions from these fields when at least 15 non-null values exist in the 30-day window. Always caveat findings based on sparse data. Never treat a missing value as zero. These fields help explain patterns in the primary metrics (gym, deep work, sleep) — they are not goals in themselves.",
-    "",
-    "Recent 14 days (most recent last):",
+  const history = buildCompactRows(recent, new Map(screen.map((r) => [r.date, r])))
+  const sections = [FIELD_LEGEND, '', SPARSE_NOTE, '']
+  const ctx = contextHeader(periods)
+  if (ctx) sections.push(ctx, '')
+  sections.push(
+    'Recent 14 days (most recent last):',
     JSON.stringify(history),
-    "",
+    '',
     "This morning's check-in (same field meanings as above, full names):",
     JSON.stringify({
       date: today.date,
       bedtime: today.bedtime,
       wake_time: today.wake_time,
       sleep_quality: today.sleep_quality,
-      gym_intention: today.gym_intention,
-      deep_work_planned: today.deep_work_planned
+      gym_intention: today.gym_intention
     }),
-    "",
-    "Write the nudge. Do not invent fields or units that are not in the schema. Only reference hours of sleep if `sleep_h` is non-null for the relevant day."
-  ].join('\n')
+    '',
+    'Write the nudge. Do not invent fields or units that are not in the schema. Only reference hours of sleep if `sleep_h` is non-null for the relevant day.'
+  )
+  return sections.join('\n')
 }

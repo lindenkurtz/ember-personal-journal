@@ -48,6 +48,11 @@ export function screenTimeWeekStart(today: Date = new Date()): string {
   return today.getDay() === 6 ? wk : addDaysKey(wk, -7)
 }
 
+/** Sunday-of-the-week ISO date key, matching the screen-time Sun–Sat entry cadence. */
+export function sundayWeekStartKey(dateKey: string): string {
+  return dayKey(startOfWeek(parseISO(dateKey), { weekStartsOn: 0 }))
+}
+
 /** Year-month key (YYYY-MM) for a YYYY-MM-DD, or for "now" with no arg. */
 export function monthKey(dateKey: string = todayKey()): string {
   return dateKey.slice(0, 7)

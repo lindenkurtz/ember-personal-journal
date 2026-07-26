@@ -12,6 +12,9 @@
   /* Ink */
   --text: #F5EDD8;
   --muted: #A89880;
+  /* Neutral reference fill — a baseline/average bar sitting next to a colored
+     "current" bar, where the point is that it's NOT the highlighted value. */
+  --muted-fill: rgba(168, 152, 128, 0.28);
 
   /* Accents */
   --amber: #E8A87C;

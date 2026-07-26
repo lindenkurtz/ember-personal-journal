@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { getScreenTimeRange, upsertScreenTimeDays, ScreenTimeRow } from '../lib/screenTime'
+import { getScreenTimeRange, upsertScreenTimeDays, formatDuration, ScreenTimeRow } from '../lib/screenTime'
 import { screenTimeWeekStart, addDaysKey } from '../lib/date'
 import DurationWheelPicker from '../components/DurationWheelPicker'
 import './ScreenTime.css'
@@ -16,15 +16,6 @@ const COLS: { key: CellKey; label: string }[] = [
   { key: 'pickups', label: 'Pickups' },
   { key: 'computer', label: 'Computer' }
 ]
-
-/** Total minutes -> "2h 31m" to match how iOS Settings > Screen Time displays it. */
-function formatDuration(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60)
-  const m = totalMinutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
 
 /**
  * Accepts "2h 31m", "2h31m", "2:31", "2h", "31m", or a bare number (read as

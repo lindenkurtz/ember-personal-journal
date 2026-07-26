@@ -4,7 +4,7 @@ import { subDays, parseISO, format } from 'date-fns'
 import { Entry, getRange, getEntry, getAllEntries } from '../lib/entries'
 import { gymStreak, restDaysLeft, bestGymStreak } from '../lib/streaks'
 import { getSettings, PushSettings } from '../lib/settings'
-import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
+import { getScreenTimeRange, getAllScreenTime, phoneTimeTrend, ScreenTimeRow, PhoneTimeTrend } from '../lib/screenTime'
 import { listContextPeriods, periodForDate, ContextPeriod } from '../lib/contextPeriods'
 import { prettyDay, todayKey, dayKey, screenTimeWeekStart, addDaysKey } from '../lib/date'
 import StatCard from '../components/StatCard'
@@ -12,6 +12,7 @@ import CheckInCard from '../components/CheckInCard'
 import DotCalendar from '../components/DotCalendar'
 import SleepTrendChart from '../components/SleepTrendChart'
 import SocialFrequency from '../components/SocialFrequency'
+import ScreenTimeTrendCard from '../components/ScreenTimeTrendCard'
 import ContextPeriodModal from '../components/ContextPeriodModal'
 import './Dashboard.css'
 
@@ -27,6 +28,7 @@ export default function Dashboard() {
   // banner/nag rather than falsely claiming nothing is set/logged.
   const [periods, setPeriods] = useState<ContextPeriod[] | null>(null)
   const [screenWeek, setScreenWeek] = useState<ScreenTimeRow[] | null>(null)
+  const [screenTrend, setScreenTrend] = useState<PhoneTimeTrend | null>(null)
   const [showCtxEditor, setShowCtxEditor] = useState(false)
   const [ctxDismissed, setCtxDismissed] = useState(
     () => localStorage.getItem(CTX_DISMISS_KEY) === todayKey()
@@ -47,9 +49,10 @@ export default function Dashboard() {
       getSettings(),
       getAllEntries(),
       listContextPeriods().catch(() => null),
-      getScreenTimeRange(wk, addDaysKey(wk, 6)).catch(() => null)
+      getScreenTimeRange(wk, addDaysKey(wk, 6)).catch(() => null),
+      getAllScreenTime().catch(() => null)
     ])
-      .then(([range, t, y, s, all, ps, st]) => {
+      .then(([range, t, y, s, all, ps, st, allScreen]) => {
         if (cancelled) return
         setEntries(range)
         setAllEntries(all)
@@ -58,6 +61,7 @@ export default function Dashboard() {
         setSettings(s)
         setPeriods(ps)
         setScreenWeek(st)
+        setScreenTrend(allScreen ? phoneTimeTrend(allScreen) : null)
       })
       .catch((err) => console.error('[dashboard]', err))
       .finally(() => !cancelled && setLoading(false))
@@ -196,6 +200,8 @@ export default function Dashboard() {
             </div>
             <SocialFrequency entries={entries} />
           </section>
+
+          {screenTrend && <ScreenTimeTrendCard trend={screenTrend} />}
         </>
       )}
 

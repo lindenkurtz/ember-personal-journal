@@ -1,0 +1,77 @@
+.sttrend {
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sttrend:hover {
+  background: var(--card-soft);
+}
+
+.sttrend:active {
+  transform: scale(0.99);
+}
+
+.sttrend__range {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.sttrend__arrow {
+  flex: 0 0 auto;
+  color: var(--amber);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.sttrend__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sttrend__row {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.sttrend__label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sttrend__track {
+  height: 10px;
+  border-radius: 4px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.sttrend__fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.sttrend__fill--week {
+  background: var(--amber);
+}
+
+.sttrend__fill--avg {
+  background: var(--muted-fill);
+}
+
+.sttrend__value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+.sttrend__delta {
+  margin: 0;
+  font-size: 13px;
+}

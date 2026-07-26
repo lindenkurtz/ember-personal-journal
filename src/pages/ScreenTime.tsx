@@ -8,11 +8,39 @@ import './ScreenTime.css'
 type CellKey = 'phone' | 'pickups' | 'computer'
 type Grid = Record<string, Record<CellKey, string>>
 
+const DURATION_KEYS: CellKey[] = ['phone', 'computer']
+
 const COLS: { key: CellKey; label: string }[] = [
-  { key: 'phone', label: 'Phone (min)' },
+  { key: 'phone', label: 'Phone' },
   { key: 'pickups', label: 'Pickups' },
-  { key: 'computer', label: 'Computer (min)' }
+  { key: 'computer', label: 'Computer' }
 ]
+
+/** Total minutes -> "2h 31m" to match how iOS Settings > Screen Time displays it. */
+function formatDuration(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+/**
+ * Accepts "2h 31m", "2h31m", "2:31", "2h", "31m", or a bare number (read as
+ * minutes, for quick entry). Returns null for empty/unparseable input.
+ */
+function parseDuration(raw: string): number | null {
+  const s = raw.trim().toLowerCase()
+  if (s === '') return null
+  const colon = s.match(/^(\d+):(\d{1,2})$/)
+  if (colon) return parseInt(colon[1], 10) * 60 + parseInt(colon[2], 10)
+  const hm = s.match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/)
+  if (hm && (hm[1] !== undefined || hm[2] !== undefined)) {
+    return (hm[1] ? parseInt(hm[1], 10) * 60 : 0) + (hm[2] ? parseInt(hm[2], 10) : 0)
+  }
+  if (/^\d+$/.test(s)) return parseInt(s, 10)
+  return null
+}
 
 /**
  * Weekly batch entry for daily screen-time values, copied from iOS
@@ -45,9 +73,9 @@ export default function ScreenTime() {
         const g = { ...empty }
         for (const r of rows) {
           g[r.date] = {
-            phone: r.phone_minutes != null ? String(r.phone_minutes) : '',
+            phone: r.phone_minutes != null ? formatDuration(r.phone_minutes) : '',
             pickups: r.phone_pickups != null ? String(r.phone_pickups) : '',
-            computer: r.computer_minutes != null ? String(r.computer_minutes) : ''
+            computer: r.computer_minutes != null ? formatDuration(r.computer_minutes) : ''
           }
         }
         setGrid(g)
@@ -58,8 +86,15 @@ export default function ScreenTime() {
   }, [weekStart, days])
 
   function setCell(d: string, key: CellKey, raw: string) {
-    const v = raw.replace(/\D/g, '')
+    const v = DURATION_KEYS.includes(key) ? raw.replace(/[^0-9hm:\s]/gi, '') : raw.replace(/\D/g, '')
     setGrid((g) => ({ ...g, [d]: { ...g[d], [key]: v } }))
+  }
+
+  function normalizeCell(d: string, key: CellKey) {
+    if (!DURATION_KEYS.includes(key)) return
+    const mins = parseDuration(grid[d]?.[key] ?? '')
+    if (mins == null) return
+    setGrid((g) => ({ ...g, [d]: { ...g[d], [key]: formatDuration(mins) } }))
   }
 
   async function save() {
@@ -71,12 +106,12 @@ export default function ScreenTime() {
         const c = grid[d]
         // All-blank days are skipped entirely — no data must stay "no row",
         // not a row of nulls.
-        if (!c || (c.phone === '' && c.pickups === '' && c.computer === '')) continue
+        if (!c || (c.phone.trim() === '' && c.pickups.trim() === '' && c.computer.trim() === '')) continue
         patches.push({
           date: d,
-          phone_minutes: c.phone === '' ? null : parseInt(c.phone, 10),
-          phone_pickups: c.pickups === '' ? null : parseInt(c.pickups, 10),
-          computer_minutes: c.computer === '' ? null : parseInt(c.computer, 10)
+          phone_minutes: parseDuration(c.phone),
+          phone_pickups: c.pickups.trim() === '' ? null : parseInt(c.pickups, 10),
+          computer_minutes: parseDuration(c.computer)
         })
       }
       await upsertScreenTimeDays(patches)
@@ -120,8 +155,9 @@ export default function ScreenTime() {
 
       <p className="st__hint">
         From iOS Settings → Screen Time. Phone counts <strong>Social +
-        Entertainment only</strong>; Computer is Mac + iPad combined. Leave
-        unknown days blank — partial weeks are fine.
+        Entertainment only</strong>; Computer is Mac + iPad combined. Enter
+        durations like <strong>2h 31m</strong>. Leave unknown days blank —
+        partial weeks are fine.
       </p>
 
       <div className="st__grid">
@@ -138,12 +174,13 @@ export default function ScreenTime() {
               <input
                 key={c.key}
                 className="st__cell"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="—"
+                inputMode={DURATION_KEYS.includes(c.key) ? 'text' : 'numeric'}
+                pattern={DURATION_KEYS.includes(c.key) ? undefined : '[0-9]*'}
+                placeholder={DURATION_KEYS.includes(c.key) ? '0h 0m' : '—'}
                 aria-label={`${format(parseISO(d), 'EEEE, MMM d')} — ${c.label}`}
                 value={grid[d]?.[c.key] ?? ''}
                 onChange={(ev) => setCell(d, c.key, ev.target.value)}
+                onBlur={() => normalizeCell(d, c.key)}
                 disabled={loading}
               />
             ))}

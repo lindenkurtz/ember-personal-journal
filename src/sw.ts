@@ -1,9 +1,17 @@
 /// <reference lib="WebWorker" />
+import { clientsClaim } from 'workbox-core'
 import { precacheAndRoute } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
 import { NetworkFirst, NetworkOnly } from 'workbox-strategies'
 
 declare const self: ServiceWorkerGlobalScope
+
+// Without these, a new deploy's SW sits "waiting" until every open client
+// fully closes. iOS backgrounds the home-screen PWA instead of closing it,
+// so it can be stuck on a stale bundle indefinitely — activate immediately
+// and take control so `registerType: 'autoUpdate'` actually reloads clients.
+self.skipWaiting()
+clientsClaim()
 
 precacheAndRoute(self.__WB_MANIFEST)
 

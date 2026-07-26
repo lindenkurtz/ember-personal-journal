@@ -8,7 +8,7 @@ import { supabase } from './supabase'
  */
 export interface ScreenTimeRow {
   date: string // YYYY-MM-DD, primary key
-  phone_minutes: number | null // iPhone, Social + Entertainment categories only
+  phone_minutes: number | null // iPhone, total screen time
   phone_pickups: number | null // iPhone
   computer_minutes: number | null // Mac + iPad combined
 }

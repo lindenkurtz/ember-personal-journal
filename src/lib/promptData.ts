@@ -73,7 +73,7 @@ export const FIELD_LEGEND = [
   '  flags = confound flags true that day: sick; alc = alcohol; away = slept away from home (the night ending that morning — same night as the sleep fields); trav = 3+ hours in transit; caff = caffeine after ~2pm; ddl = exam or major deadline within 48h.',
   '    flags: [] means tracked, nothing unusual. flags ABSENT from a row means confounds were not yet tracked that day — never read absence as "none".',
   '    Treat flags as confounders: rare events that distort sleep and day quality. Use them to explain outliers and discount distorted days — they are not goals and never a target.',
-  '  st_ph = phone screen minutes (Social + Entertainment categories only), st_pu = phone pickups, st_pc = computer minutes (Mac + iPad combined). Entered weekly, so missing on many days. Phone and computer are deliberately separate — Instagram is blocked on the phone and scrolling moved to the computer, so a merged total would mislead.',
+  '  st_ph = phone screen minutes (total screen time), st_pu = phone pickups, st_pc = computer minutes (Mac + iPad combined). Entered weekly, so missing on many days. Phone and computer are deliberately separate — Instagram is blocked on the phone and scrolling moved to the computer, so a merged total would mislead.',
   '  soc = had meaningful social time (boolean).',
   '  hrv = avg heart-rate variability (ms), rhr = resting heart rate (bpm), steps = daily steps.',
   '  tempF = outside °F at morning check-in, wcode = Open-Meteo WMO weather code.',

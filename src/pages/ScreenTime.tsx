@@ -156,10 +156,10 @@ export default function ScreenTime() {
       </div>
 
       <p className="st__hint">
-        From iOS Settings → Screen Time. Phone counts <strong>Social +
-        Entertainment only</strong>; Computer is Mac + iPad combined. Tap a
-        duration to scroll in hours and minutes. Leave unknown days blank —
-        partial weeks are fine.
+        From iOS Settings → Screen Time. Phone is <strong>total screen
+        time</strong>; Computer is Mac + iPad combined. Tap a duration to
+        scroll in hours and minutes. Leave unknown days blank — partial
+        weeks are fine.
       </p>
 
       <div className="st__grid">

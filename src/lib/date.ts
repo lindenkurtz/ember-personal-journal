@@ -37,13 +37,15 @@ export function addDaysKey(key: string, n: number): string {
 }
 
 /**
- * Monday key of the screen-time entry week: the week ending on the most recent
- * Sunday. On a Sunday that's the current week (entry happens Sunday night, per
- * iOS Screen Time's Mon–Sun week); any other day it's last week.
+ * Sunday key of the screen-time entry week: the most recently completed
+ * Sunday–Saturday week, matching iOS Screen Time's own Sun–Sat weekly
+ * report reset. The Sun–Sat week containing today is only complete once
+ * today is Saturday; every other day (including Sunday, when entry
+ * happens) falls back to the prior week, which is fully done.
  */
 export function screenTimeWeekStart(today: Date = new Date()): string {
-  const wk = weekStartKey(dayKey(today))
-  return today.getDay() === 0 ? wk : addDaysKey(wk, -7)
+  const wk = dayKey(startOfWeek(today, { weekStartsOn: 0 }))
+  return today.getDay() === 6 ? wk : addDaysKey(wk, -7)
 }
 
 /** Year-month key (YYYY-MM) for a YYYY-MM-DD, or for "now" with no arg. */

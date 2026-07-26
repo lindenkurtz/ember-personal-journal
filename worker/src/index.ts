@@ -155,8 +155,9 @@ function dueEvening(s: Settings, hhmm: string, dateKey: string, e: Entry | null)
 }
 
 // Weekly screen-time reminder: Sunday at weekly_time. Smart-skips when any day
-// of the target week (Mon..this Sunday) is already logged; like the daily
-// slots, a skip does NOT write last_weekly_sent.
+// of the target week (last Sun..Sat, the just-completed week per iOS Screen
+// Time's own weekly reset) is already logged; like the daily slots, a skip
+// does NOT write last_weekly_sent.
 async function dueWeekly(
   supabase: SupabaseClient,
   s: Settings,
@@ -170,8 +171,8 @@ async function dueWeekly(
   const { data, error } = await supabase
     .from('screen_time')
     .select('date')
-    .gte('date', addDaysKey(dateKey, -6))
-    .lte('date', dateKey)
+    .gte('date', addDaysKey(dateKey, -7))
+    .lte('date', addDaysKey(dateKey, -1))
     .limit(1)
   if (error) throw error
   return (data ?? []).length === 0

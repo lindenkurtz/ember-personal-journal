@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { getScreenTimeRange, upsertScreenTimeDays, ScreenTimeRow } from '../lib/screenTime'
 import { screenTimeWeekStart, addDaysKey } from '../lib/date'
+import DurationWheelPicker from '../components/DurationWheelPicker'
 import './ScreenTime.css'
 
 type CellKey = 'phone' | 'pickups' | 'computer'
@@ -86,15 +87,16 @@ export default function ScreenTime() {
   }, [weekStart, days])
 
   function setCell(d: string, key: CellKey, raw: string) {
-    const v = DURATION_KEYS.includes(key) ? raw.replace(/[^0-9hm:\s]/gi, '') : raw.replace(/\D/g, '')
+    const v = raw.replace(/\D/g, '')
     setGrid((g) => ({ ...g, [d]: { ...g[d], [key]: v } }))
   }
 
-  function normalizeCell(d: string, key: CellKey) {
-    if (!DURATION_KEYS.includes(key)) return
-    const mins = parseDuration(grid[d]?.[key] ?? '')
-    if (mins == null) return
-    setGrid((g) => ({ ...g, [d]: { ...g[d], [key]: formatDuration(mins) } }))
+  const [picker, setPicker] = useState<{ day: string; key: 'phone' | 'computer' } | null>(null)
+
+  function confirmPicker(minutes: number) {
+    if (!picker) return
+    setGrid((g) => ({ ...g, [picker.day]: { ...g[picker.day], [picker.key]: formatDuration(minutes) } }))
+    setPicker(null)
   }
 
   async function save() {
@@ -155,8 +157,8 @@ export default function ScreenTime() {
 
       <p className="st__hint">
         From iOS Settings → Screen Time. Phone counts <strong>Social +
-        Entertainment only</strong>; Computer is Mac + iPad combined. Enter
-        durations like <strong>2h 31m</strong>. Leave unknown days blank —
+        Entertainment only</strong>; Computer is Mac + iPad combined. Tap a
+        duration to scroll in hours and minutes. Leave unknown days blank —
         partial weeks are fine.
       </p>
 
@@ -170,20 +172,32 @@ export default function ScreenTime() {
         {days.map((d) => (
           <div key={d} className="st__gridRow">
             <span className="st__day">{format(parseISO(d), 'EEE d')}</span>
-            {COLS.map((c) => (
-              <input
-                key={c.key}
-                className="st__cell"
-                inputMode={DURATION_KEYS.includes(c.key) ? 'text' : 'numeric'}
-                pattern={DURATION_KEYS.includes(c.key) ? undefined : '[0-9]*'}
-                placeholder={DURATION_KEYS.includes(c.key) ? '0h 0m' : '—'}
-                aria-label={`${format(parseISO(d), 'EEEE, MMM d')} — ${c.label}`}
-                value={grid[d]?.[c.key] ?? ''}
-                onChange={(ev) => setCell(d, c.key, ev.target.value)}
-                onBlur={() => normalizeCell(d, c.key)}
-                disabled={loading}
-              />
-            ))}
+            {COLS.map((c) =>
+              DURATION_KEYS.includes(c.key) ? (
+                <button
+                  key={c.key}
+                  type="button"
+                  className="st__cell st__cell--duration"
+                  aria-label={`${format(parseISO(d), 'EEEE, MMM d')} — ${c.label}`}
+                  onClick={() => setPicker({ day: d, key: c.key as 'phone' | 'computer' })}
+                  disabled={loading}
+                >
+                  {grid[d]?.[c.key] || <span className="st__cellPlaceholder">—</span>}
+                </button>
+              ) : (
+                <input
+                  key={c.key}
+                  className="st__cell"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="—"
+                  aria-label={`${format(parseISO(d), 'EEEE, MMM d')} — ${c.label}`}
+                  value={grid[d]?.[c.key] ?? ''}
+                  onChange={(ev) => setCell(d, c.key, ev.target.value)}
+                  disabled={loading}
+                />
+              )
+            )}
           </div>
         ))}
       </div>
@@ -192,6 +206,15 @@ export default function ScreenTime() {
       <button className="st__save" onClick={() => void save()} disabled={loading || saving}>
         {saving ? 'Saving…' : savedFlash ? 'Saved ✓' : 'Save week'}
       </button>
+
+      {picker && (
+        <DurationWheelPicker
+          title={`${COLS.find((c) => c.key === picker.key)?.label} — ${format(parseISO(picker.day), 'EEEE, MMM d')}`}
+          initialMinutes={parseDuration(grid[picker.day]?.[picker.key] ?? '') ?? 0}
+          onCancel={() => setPicker(null)}
+          onConfirm={confirmPicker}
+        />
+      )}
     </main>
   )
 }

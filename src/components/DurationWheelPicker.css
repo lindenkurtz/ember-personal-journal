@@ -1,0 +1,126 @@
+.durwheel {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+}
+
+.durwheel__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.durwheel__sheet {
+  position: relative;
+  width: 100%;
+  background: var(--card);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding:
+    20px
+    max(20px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  animation: durwheel-up 0.24s var(--ease);
+}
+
+@keyframes durwheel-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.durwheel__title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+}
+
+.durwheel__wheels {
+  display: flex;
+  gap: 8px;
+}
+
+.durwheel__col {
+  position: relative;
+  flex: 1;
+}
+
+.durwheel__highlight {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 40px;
+  transform: translateY(-50%);
+  background: var(--card-soft);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.durwheel__scroll {
+  position: relative;
+  z-index: 1;
+  height: 200px;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent, black 28%, black 72%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 28%, black 72%, transparent);
+}
+
+.durwheel__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.durwheel__row {
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.durwheel__num {
+  font-size: 19px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.durwheel__num--selected {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.durwheel__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.durwheel__cancel,
+.durwheel__done {
+  flex: 1;
+  padding: 12px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.durwheel__cancel {
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  color: var(--text);
+}
+
+.durwheel__done {
+  background: var(--amber-soft);
+  border: 1px solid var(--terracotta);
+  color: var(--text);
+}

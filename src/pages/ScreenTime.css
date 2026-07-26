@@ -123,6 +123,21 @@
   opacity: 0.5;
 }
 
+.st__cell--duration {
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.st__cell--duration:disabled {
+  opacity: 0.5;
+}
+
+.st__cellPlaceholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
 .st__error {
   color: var(--terracotta);
   font-size: 13px;

@@ -1,13 +1,7 @@
 import { supabase } from '../supabase'
-import { monthRange } from '../date'
 import type { FinanceTransaction } from '../../../shared/finance/types'
 
 export type TransactionPatch = Partial<FinanceTransaction> & { id: string }
-
-export async function getMonthTransactions(month: string): Promise<FinanceTransaction[]> {
-  const { start, end } = monthRange(month)
-  return getTransactionsRange(start, end)
-}
 
 export async function getTransactionsRange(start: string, end: string): Promise<FinanceTransaction[]> {
   const { data, error } = await supabase
@@ -53,7 +47,8 @@ export async function updateTransaction(patch: TransactionPatch): Promise<Financ
   return data as FinanceTransaction
 }
 
-/** Insert manual or CSV rows. `ignoreDuplicates` so re-importing a CSV is a no-op. */
+/** Insert screenshot-extracted or manual rows. `ignoreDuplicates` + the content-hash
+ * id in hash.ts make re-importing the same screenshot a no-op. */
 export async function insertTransactions(rows: FinanceTransaction[]): Promise<number> {
   if (!rows.length) return 0
   const { error, count } = await supabase

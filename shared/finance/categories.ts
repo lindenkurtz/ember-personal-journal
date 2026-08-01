@@ -31,11 +31,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   peer_payment: 'Peer Payment'
 }
 
-// Categories excluded from income/expense cash-flow math. `transfer` is the
-// internal-move bucket; `peer_payment` is held out until the user resolves it
-// in the review queue.
-export const NON_SPENDING: Category[] = ['transfer', 'income']
-
 // Map Plaid's personal_finance_category.primary → our simplified schema. The
 // detailed override below catches the few primaries we want to split further.
 const PFC_PRIMARY_MAP: Record<string, Category> = {

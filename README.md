@@ -1,15 +1,24 @@
 # Ember
 
 A small, private daily journal for tracking sleep, gym, focused work, social
-time, meal timing, confounding events, and screen time. Single-user PWA. Lives
-behind Cloudflare Access. Built with React + Vite, Supabase, and the Claude API.
+time, meal timing, confounding events, and screen time — plus a personal finance
+dashboard at `/finance`. Single-user PWA. Lives behind Cloudflare Access. Built
+with React + Vite, Supabase, and the Claude API.
+
+Conventions and the "why" behind the design decisions live in
+[CLAUDE.md](CLAUDE.md); finance setup and operations in
+[docs/FINANCE.md](docs/FINANCE.md).
 
 ## Stack
 
 - **React + Vite** (TypeScript), deployed as a static site to Cloudflare Pages
-- **Supabase** for persistence — one `entries` table, one row per day
-- **Anthropic Claude** for the morning nudge and the patterns analysis, called
-  through a Cloudflare Pages Function so the API key never ships to the browser
+- **Supabase** for persistence — `entries` (one row per day), `screen_time`,
+  `context_periods`, `push_*`, and the `finance_*` tables
+- **Anthropic Claude** for the morning nudge, the patterns analysis, and
+  screenshot transaction extraction — called through a Cloudflare Pages Function
+  so the API key never ships to the browser
+- **Plaid** for bank sync, called via raw REST from a Pages Function and the
+  cron Worker
 - **Plus Jakarta Sans** + warm palette
 
 ## Setup
@@ -20,9 +29,9 @@ cp .env.example .env       # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KE
 npm run dev                # http://localhost:5173
 ```
 
-The morning check-in works without the Anthropic key (it gracefully skips the
-nudge); the patterns tab needs the Pages Function running. To test the function
-locally:
+`npm run dev` serves the SPA only — anything under `/api/*` (the Claude proxy,
+Plaid) 404s. The morning check-in degrades gracefully without it (the nudge is
+skipped); Patterns and Finance need the Functions running:
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .dev.vars
@@ -44,9 +53,14 @@ create table public.entries (
   day_quality       smallint check (day_quality between 1 and 5),
   gym_intention     text check (gym_intention in ('yes','no','rest')),
   gym_actual        text check (gym_actual    in ('yes','no','rest')),
+  -- Deep work: retired July 2026. Kept so historical rows and the History page
+  -- still render; nothing writes these again. ('rest' above is likewise a legacy
+  -- value the app no longer produces — see the gym-streak note in CLAUDE.md.)
   deep_work_target  numeric(4,1),
   deep_work_actual  numeric(4,1),
   deep_work_start   time,
+  deep_work_planned text check (deep_work_planned in ('yes','no')),
+  deep_work_plan_note text,
   social            boolean,
   note              text,
   -- Passive context (all nullable; the app never writes zero defaults):
@@ -99,19 +113,25 @@ create table public.push_settings (
 insert into public.push_settings (id) values (1) on conflict do nothing;
 ```
 
-Then run the two migration files in [supabase/](supabase/) — both are idempotent
-and safe to re-run:
+Then run the three migration files in [supabase/](supabase/), in this order.
+All are idempotent and safe to re-run:
 
-- `supabase/finance_migration.sql` — the `finance_*` tables (see docs/FINANCE.md)
-- `supabase/tracking_v2_migration.sql` — tracking v2 (July 2026): confound
-  flags, `focused_work`, `last_meal_start_time`, the `context_periods` and
-  `screen_time` tables, and the weekly-push columns on `push_settings`. Deep
-  work was retired at the same time — its columns and historical data stay in
-  the DB and are viewable on the History page.
+1. `tracking_v2_migration.sql` — tracking v2 (July 2026): confound flags,
+   `focused_work`, `last_meal_start_time`, the `context_periods` and
+   `screen_time` tables, and the weekly-push columns on `push_settings`. Deep
+   work was retired at the same time — its columns and historical data stay in
+   the DB and are viewable on the History page.
+2. `finance_migration.sql` — the `finance_*` tables (see
+   [docs/FINANCE.md](docs/FINANCE.md)).
+3. `push_rls_migration.sql` — backfills `anon` RLS policies on
+   `push_subscriptions` and `push_settings`, which the block above creates
+   without them.
 
 RLS is enabled on every table; the SPA's publishable key authenticates as
 `anon` and needs explicit SELECT + INSERT + UPDATE policies per table (the
-migrations create them). See CLAUDE.md for the two-key model.
+migrations create them). The one exception is `finance_plaid_items`, which holds
+Plaid access tokens and deliberately has **no** anon policy. See CLAUDE.md for
+the two-key model.
 
 ## Deploy (Cloudflare Pages)
 
@@ -120,49 +140,64 @@ migrations create them). See CLAUDE.md for the two-key model.
 3. Environment variables:
    - `VITE_SUPABASE_URL` (Production + Preview) — build-time
    - `VITE_SUPABASE_ANON_KEY` (Production + Preview) — build-time
-   - `ANTHROPIC_API_KEY` (Production + Preview) — runtime, available only to Functions
+   - `VITE_VAPID_PUBLIC_KEY` (Production + Preview) — build-time; without it the
+     push toggle in Settings stays disabled
+   - `ANTHROPIC_API_KEY` (Production + Preview) — runtime, Functions only
+   - Plaid + Supabase server vars for `/api/plaid/*` — see docs/FINANCE.md
 4. Add the Pages domain to Cloudflare Access (Zero Trust → Access → Applications).
+
+The cron Worker in [worker/](worker/) deploys separately with
+`cd worker && npm run deploy`.
 
 ## Project structure
 
 ```
 functions/api/claude.ts   Pages Function — Anthropic proxy (key stays here)
+functions/api/plaid/      Pages Functions — Plaid link / exchange / manual sync
+shared/finance/           runtime-agnostic finance logic, compiled into the SPA,
+                          the Functions, and the Worker
+worker/                   separate Cloudflare Worker — 5-min cron: push
+                          notifications, weather snapshot, daily Plaid sync
 src/lib/                  supabase, entries, screenTime, contextPeriods,
-                          promptData, claude, date, streaks helpers
+                          settings, push, promptData, claude, date, streaks
+src/lib/finance/          SPA-side finance data access + screenshot extraction
 src/components/           QuestionCard, ProgressDots, StarRating, PillGroup,
-                          ToggleChipGroup, TimeInput, NumberStepper, NoteInput,
-                          StatCard, DotCalendar, SleepTrendChart,
-                          SocialFrequency, ContextPeriodModal
-src/pages/                Morning, Dashboard, Evening, Patterns, History,
+                          ToggleChipGroup, TimeInput, DurationWheelPicker,
+                          NoteInput, CheckInCard, StatCard, DotCalendar,
+                          SleepTrendChart, SocialFrequency,
+                          ScreenTimeTrendCard, ContextPeriodModal
+src/components/finance/   finance-only components
+src/pages/                Dashboard, Morning, Evening, Patterns, History,
                           ScreenTime, Settings, Finance
 src/styles/               theme.css (palette tokens), global.css
+supabase/                 idempotent SQL migrations
 ```
 
 ## Navigation
 
-- `/` — dashboard: check-in cards, gym streak, dot calendar, sleep trend, social row
+- `/` — dashboard: check-in cards, gym streak, dot calendar, sleep trend, social row, screen-time trend
 - `/morning` — morning check-in (bedtime, wake, sleep quality, gym intention)
 - `/evening` — evening check-in; accepts `?date=YYYY-MM-DD` to back-fill a missed day
 - `/history` — read-only look-back over every day, incl. legacy deep-work data and confound badges
-- `/screentime` — weekly batch entry of daily screen-time values (Sunday nights)
+- `/screentime` — weekly batch entry of daily screen-time values
 - `/patterns` — on-demand 30-day analysis from Claude, streamed in
+- `/finance` — net worth, cash flow, transactions, review queue (see docs/FINANCE.md)
 - `/settings` — reminder times, push subscription toggle, gym rest budget, location
 
 ## Icons
 
-The manifest ships with the bundled SVG. For a polished iOS home-screen icon,
-drop a 180×180 PNG at `public/apple-touch-icon.png` and uncomment the
-`<link rel="apple-touch-icon">` in `index.html`.
+The manifest ships PNG icons from `public/`. `public/apple-touch-icon.png` is
+the 180×180 iOS home-screen icon and doubles as the push-notification icon.
 
 ## Push notifications
 
 Daily reminders are sent by a separate Cloudflare Worker in [worker/](worker/)
 that runs on a 5-minute cron, checks current local time against
-`push_settings.{morning,evening}_time`, and only fires if the matching
-check-in fields for today are still empty. Sundays add a third slot at
-`weekly_time` reminding you to log last week's screen time — skipped if any
-day of that week is already in `screen_time`. Notifications work on iPhone
-only after the user does **Share → Add to Home Screen** (iOS 16.4+).
+`push_settings.{morning,evening,weekly}_time`, and only fires if the matching
+check-in fields for today are still empty. The weekly slot reminds you to log
+last week's screen time — first on Sunday, then once a day until logged, and
+never on Saturday. Notifications work on iPhone only after the user does
+**Share → Add to Home Screen** (iOS 16.4+).
 
 One-time setup:
 
@@ -170,7 +205,7 @@ One-time setup:
 # 1. Generate VAPID keypair
 npx web-push generate-vapid-keys
 
-# 2. SPA — put the public key in .env so the subscribe flow can use it
+# 2. SPA — put the public key in .env (and in Cloudflare Pages env vars)
 echo "VITE_VAPID_PUBLIC_KEY=<public>" >> .env
 
 # 3. Worker — install + push secrets
@@ -183,6 +218,10 @@ npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_KEY          # the sb_secret_ key — bypasses RLS
 npx wrangler deploy
 ```
+
+`web-push` is only used here, as a one-shot CLI to generate the keypair — it is
+never a dependency of this project (it's Node-only and won't run on Workers;
+sending is hand-rolled in `worker/src/webpush.ts`).
 
 To manually fire a notification (for testing):
 `curl https://<worker-domain>/?force=morning` (also `evening`, `weekly`, `finance`).
@@ -213,14 +252,13 @@ Notes:
 - **Date keying:** `sleep_hours` is keyed to the morning the user woke up
   (same day as `sleep_quality`, `bedtime`, and `wake_time`) — i.e. when the
   Shortcut runs on morning D, `sleep_hours` is written to D, **not** D-1.
-  The daily totals
-  (`hrv_avg`, `resting_hr`, `steps`) are keyed to the day they were measured,
-  which means they *are* backfilled to D-1 on the morning-D run.
+  The daily totals (`hrv_avg`, `resting_hr`, `steps`) are keyed to the day they
+  were measured, which means they *are* backfilled to D-1 on the morning-D run.
 - Omit fields you don't have a value for — never send `0` as a default.
   Missing data must stay null so the Patterns analyzer can correctly identify
   these as sparse signals.
 - Weather (`weather_temp_f`, `weather_code`) is populated automatically by the
-  cron Worker after each morning push, using the lat/lon from `push_settings`.
+  cron Worker once per local day, using the lat/lon from `push_settings`.
   No external input needed.
 
 ## Notes
@@ -228,7 +266,10 @@ Notes:
 - The `entries` table is upserted on the primary key `date`. Morning fills the
   intent columns; evening fills the actuals — same row, never duplicated.
 - The Anthropic model is hardcoded in [functions/api/claude.ts](functions/api/claude.ts)
-  as `claude-sonnet-4-20250514`. To upgrade, change the `MODEL` constant.
+  as `claude-sonnet-4-6`. To upgrade, change the `MODEL` constant there — the SPA
+  never names a model.
 - Service worker auto-updates silently on new builds via `registerSW({ immediate: true })`.
+- There is no test suite by design (single user, low blast radius). A passing
+  `npm run build` is the correctness signal — it typechecks all four sub-projects.
 - Recharts is the largest dep; if bundle size becomes a concern, lazy-load the
-  dashboard charts behind `React.lazy()`.
+  dashboard and finance charts behind `React.lazy()`.

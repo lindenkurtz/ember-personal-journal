@@ -21,13 +21,3 @@ export async function getFinanceSettings(): Promise<FinanceSettings> {
   if (error) throw error
   return (data as FinanceSettings | null) ?? DEFAULTS
 }
-
-export async function updateFinanceSettings(patch: Partial<FinanceSettings>): Promise<FinanceSettings> {
-  const { data, error } = await supabase
-    .from('finance_settings')
-    .upsert({ id: 1, ...patch }, { onConflict: 'id' })
-    .select(COLUMNS)
-    .single()
-  if (error) throw error
-  return data as FinanceSettings
-}

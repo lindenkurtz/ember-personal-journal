@@ -7,5 +7,6 @@ dist-ssr
 .dev.vars
 .wrangler
 *.log
+*.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json

@@ -1,84 +1,414 @@
 # CLAUDE.md
 
-Project guidance for Claude Code when working in this repo. Keep it tight — only conventions that aren't obvious from reading the code.
+Project guidance for Claude Code when working in this repo. Only conventions and
+constraints that aren't obvious from reading the code. Setup instructions live in
+[README.md](README.md); finance setup/operations in [docs/FINANCE.md](docs/FINANCE.md).
 
 ## What this is
 
-**Ember** — a single-user PWA journal for daily sleep / gym / focused-work / social tracking, plus meal timing, confound flags, and weekly-entered screen time. (Deep work was tracked May–July 2026, then retired — see the retirement bullet below.) React + Vite SPA, Supabase persistence, deployed as a static site to Cloudflare Pages with one Pages Function (Anthropic proxy in [functions/](functions/)) and one separate Cloudflare Worker (cron-scheduled push-notification dispatcher in [worker/](worker/)). Auth is delegated to Cloudflare Access — there is no in-app login.
+**Ember** — a single-user PWA. Two features share one shell:
 
-There is also a **finance dashboard** at `/finance` (Plaid sync, Apple Card CSV import, transaction classification, net-worth snapshots). Its server logic is shared between a Plaid Pages Function and the cron Worker via runtime-agnostic modules in [shared/finance/](shared/finance/) (`tsc -b` compiles `shared/` under both the functions and worker projects, and the pure parts under the SPA). Setup, architecture, and Plaid notes live in [docs/FINANCE.md](docs/FINANCE.md). Key rule: `finance_plaid_items` holds Plaid access tokens and has **no anon RLS policy** — it is server-only; never read it from the SPA.
+- **Daily journal** — sleep, gym, focused work, social, meal timing, confound
+  flags, weekly-entered screen time. Morning and evening check-in flows, a
+  dashboard, a history view, and a Claude-written patterns analysis.
+- **Finance dashboard** at `/finance` — Plaid sync, Apple Card/Cash import by
+  screenshot, transaction classification, net-worth snapshots.
 
-## Architecture (the parts worth knowing)
+React + Vite SPA, Supabase persistence, deployed as a static site to Cloudflare
+Pages with Pages Functions in [functions/](functions/) and one separate
+Cloudflare Worker in [worker/](worker/) (cron: push notifications, weather
+snapshot, daily Plaid sync). Auth is delegated to Cloudflare Access — there is
+no in-app login, and no user id anywhere in the schema.
 
-- **Five TypeScript projects, one solution.** DOM types, WebWorker types, and Workers types all conflict if combined, so [tsconfig.json](tsconfig.json) is a solution-style references file and `tsc -b` builds the lot:
-  - [tsconfig.app.json](tsconfig.app.json) — SPA (`src/`), DOM types. Explicitly excludes `src/sw.ts`.
-  - [tsconfig.functions.json](tsconfig.functions.json) — Pages Function (`functions/`), Workers types.
-  - [tsconfig.sw.json](tsconfig.sw.json) — service worker (`src/sw.ts`), `WebWorker` lib. Separated from the app config because DOM and WebWorker conflict on `self`/`addEventListener`.
-  - [worker/tsconfig.json](worker/tsconfig.json) — cron Worker, Workers types.
-  - When you add a file, drop it under the directory whose tsconfig matches the runtime; don't reach across.
+## Repo layout
 
-- **Anthropic key never enters the browser.** All calls go through [functions/api/claude.ts](functions/api/claude.ts), which reads `ANTHROPIC_API_KEY` from the Pages env. Stream mode pipes Anthropic's SSE through unchanged — the client at [src/lib/claude.ts](src/lib/claude.ts) parses `content_block_delta` frames. The model is hardcoded as `MODEL` in the function; change it there, not in the SPA.
+```
+src/                  SPA (React, DOM types)
+  lib/                one module per Supabase table + date/streak/prompt helpers
+  lib/finance/        SPA-side finance data access + screenshot extraction
+  components/         journal UI primitives
+  components/finance/ finance-only components
+  pages/              one file + one sibling .css per route
+  styles/             theme.css (tokens), global.css
+  sw.ts               service worker — separate tsconfig, WebWorker types
+functions/api/        Cloudflare Pages Functions (Workers types)
+shared/finance/       runtime-agnostic finance logic — compiled into all three
+worker/               separate cron Worker (Workers types)
+supabase/             idempotent SQL migrations
+docs/FINANCE.md       finance setup + operations
+```
 
-- **One Supabase lib module per table.** [src/lib/entries.ts](src/lib/entries.ts) owns `entries`; [src/lib/settings.ts](src/lib/settings.ts) owns the singleton `push_settings` row; [src/lib/push.ts](src/lib/push.ts) owns `push_subscriptions` plus the browser subscribe flow; [src/lib/screenTime.ts](src/lib/screenTime.ts) owns `screen_time`; [src/lib/contextPeriods.ts](src/lib/contextPeriods.ts) owns `context_periods`. Never call `supabase.from(...)` directly from a component. The `entries` schema is one row per `date`; morning and evening both `upsert` on the primary key, never insert duplicates.
+## Architecture
 
-- **Routing:** `/` = Dashboard, `/morning`, `/evening`, `/patterns`, `/history`, `/screentime`, `/settings`. `/dashboard` redirects to `/` for legacy links. Evening accepts `?date=YYYY-MM-DD` to back-fill a missed previous day.
+- **Four TypeScript projects, one solution.** DOM types, WebWorker types, and
+  Workers types conflict if combined, so [tsconfig.json](tsconfig.json) is a
+  solution-style references file and `tsc -b` builds all four:
+  - [tsconfig.app.json](tsconfig.app.json) — SPA (`src/` + `shared/`), DOM types.
+    Excludes `src/sw.ts` and the two server-only finance files.
+  - [tsconfig.functions.json](tsconfig.functions.json) — Pages Functions
+    (`functions/` + `shared/`), Workers types.
+  - [tsconfig.sw.json](tsconfig.sw.json) — service worker only, `WebWorker` lib.
+    Separate from the app config because DOM and WebWorker conflict on
+    `self`/`addEventListener`.
+  - [worker/tsconfig.json](worker/tsconfig.json) — cron Worker (`worker/src/` +
+    `shared/`), Workers types.
 
-- **Push notifications are a two-piece system.** Client subscribe flow + permission gating live in [src/lib/push.ts](src/lib/push.ts); the SW `push` / `notificationclick` handlers in [src/sw.ts](src/sw.ts). VAPID public key is bundled as `VITE_VAPID_PUBLIC_KEY`. The server-side sender is a **separate Cloudflare Worker** in [worker/](worker/) (not a Pages Function — Pages Functions can't cron). It runs every 5 minutes, computes current time in `push_settings.timezone` via `Intl.DateTimeFormat`, smart-skips when today's check-in fields are already filled, dedupes via `last_morning_sent` / `last_evening_sent` / `last_weekly_sent`, and prunes `410 Gone` endpoints. There are three slots: morning, evening, and a `weekly` screen-time reminder for the just-completed Sun–Sat week — it fires first on Sunday (the on-time prompt) and re-fires once each following day the week is still unlogged (a make-up nag with different wording), but **never on Saturday**, the day the target week rolls over to the not-yet-loggable current week (mirrors `screenTimeWeekStart`). Skipped when any day of the target week already has a `screen_time` row. The worker's `dueMorning`/`dueEvening` "done" rules are kept in lockstep with `isMorningDone`/`isEveningDone` in [src/pages/Dashboard.tsx](src/pages/Dashboard.tsx) — change both or neither. Web Push (RFC 8291 aes128gcm + VAPID JWT) is hand-rolled with Web Crypto in [worker/src/webpush.ts](worker/src/webpush.ts) — **don't add the `web-push` npm package**, it's Node-only and won't run on Workers.
+  Put each new file under the directory whose tsconfig matches its runtime; don't
+  reach across. All four set `noUnusedLocals`/`noUnusedParameters`, so an orphaned
+  import or parameter fails the build.
 
-## Conventions
+- **Anthropic key never enters the browser.** All calls go through
+  [functions/api/claude.ts](functions/api/claude.ts), which reads
+  `ANTHROPIC_API_KEY` from the Pages env. Stream mode pipes Anthropic's SSE
+  through unchanged — the client at [src/lib/claude.ts](src/lib/claude.ts) parses
+  `content_block_delta` frames. Upstream errors come back as **HTTP 200 with a
+  JSON error envelope** on purpose: Cloudflare's edge replaces 5xx bodies with
+  its own branded page and would hide the real error. The model is the `MODEL`
+  constant in the function; change it there, never in the SPA.
 
-- **Finance: one sync, shared by two runtimes.** The Plaid sync orchestrator is `runSync` in [shared/finance/sync.ts](shared/finance/sync.ts) — the manual "Sync now" Pages Function ([functions/api/plaid/sync.ts](functions/api/plaid/sync.ts)) and the daily cron Worker (`financeTick` in [worker/src/index.ts](worker/src/index.ts)) both call it, so they can never drift. `shared/finance/` is pure/runtime-agnostic and is `include`d by the app, functions, and worker tsconfigs; the two server-only files (`sync.ts`, `plaidApi.ts`) are explicitly **excluded** from [tsconfig.app.json](tsconfig.app.json) so Plaid logic never enters the SPA bundle. Plaid is called via raw REST in [shared/finance/plaidApi.ts](shared/finance/plaidApi.ts) — **don't add the `plaid` npm SDK**, it's axios/Node-only and won't run on Workers (same rule as `web-push`). Amount convention: **inflow positive, outflow negative** (Plaid's is the opposite — invert on ingest). Classification ([shared/finance/classify.ts](shared/finance/classify.ts)) is data-driven off `finance_settings.cc_payment_payee`; a re-sync **never clobbers a transaction the user has `reviewed`** (see the preserve branch in `upsertTransactions`). Account toggles (`include_in_net_worth`) are likewise preserved across syncs. **Savings rates** read off a per-transaction `savings_bucket` (`short_term`/`long_term`/`retirement`), auto-set when money lands in a matched Brokerage account (Emergency/Investments/Roth IRA) and manually settable in the editor for the source-side transfer — it's the single source of truth so a transfer is counted once. **Apple Card/Cash** can't use Plaid or CSV-export (Family participant), so [src/lib/finance/extract.ts](src/lib/finance/extract.ts) sends screenshots through the `/api/claude` vision proxy (which accepts base64 `images`) to get category-tagged rows the user confirms before insert. Full setup + Plaid notes in [docs/FINANCE.md](docs/FINANCE.md).
+- **One Supabase lib module per table.** `entries` →
+  [src/lib/entries.ts](src/lib/entries.ts); the singleton `push_settings` row →
+  [src/lib/settings.ts](src/lib/settings.ts); `push_subscriptions` plus the
+  browser subscribe flow → [src/lib/push.ts](src/lib/push.ts); `screen_time` →
+  [src/lib/screenTime.ts](src/lib/screenTime.ts); `context_periods` →
+  [src/lib/contextPeriods.ts](src/lib/contextPeriods.ts); the `finance_*` tables →
+  one file each under [src/lib/finance/](src/lib/finance/). **Never call
+  `supabase.from(...)` from a component.**
 
-- **Styling: hand-rolled CSS, no framework.** Each component has a sibling `.css` file (e.g. `StarRating.tsx` + `StarRating.css`). Class names are BEM-ish and component-prefixed (`.stars__btn`, `.qcard__question`). Theme tokens live in [src/styles/theme.css](src/styles/theme.css) — **never hardcode a color**; use `var(--amber)`, `var(--card)`, etc. Adding a new color? Add a token, not a one-off hex.
+- **Routing** ([src/App.tsx](src/App.tsx)): `/` = Dashboard, plus `/morning`,
+  `/evening`, `/patterns`, `/history`, `/screentime`, `/finance`, `/settings`.
+  `/dashboard` and any unknown path redirect to `/`. Evening accepts
+  `?date=YYYY-MM-DD` to back-fill a missed day.
 
-- **Journal-flow primitive.** Morning and Evening both use the same pattern: a `QuestionCard` with framer-motion fade between steps, `ProgressDots` up top, and the `morning__primary` / `morning__ghost` buttons at the bottom. Evening imports `Morning.css` for shared layout classes. If you build a third flow, factor out a `CheckInFlow` controller — don't fork the layout a third time.
+- **Push is a three-piece system.** Client subscribe flow + permission gating in
+  [src/lib/push.ts](src/lib/push.ts); the SW `push` / `notificationclick`
+  handlers in [src/sw.ts](src/sw.ts); the sender is the **separate cron Worker**
+  in [worker/](worker/) (not a Pages Function — those can't cron). The Worker
+  runs every 5 minutes, computes local time in `push_settings.timezone` via
+  `Intl.DateTimeFormat`, smart-skips when today's fields are already filled,
+  dedupes per day via `last_{morning,evening,weekly}_sent`, and prunes
+  `404`/`410` endpoints. Web Push (RFC 8291 aes128gcm + VAPID JWT) is hand-rolled
+  with Web Crypto in [worker/src/webpush.ts](worker/src/webpush.ts) — **don't add
+  the `web-push` npm package**, it's Node-only and won't run on Workers.
 
-- **Date keys** are ISO `YYYY-MM-DD` strings in the user's local timezone. Always go through [src/lib/date.ts](src/lib/date.ts) (`todayKey`, `dayKey`, `lastNDays`) — never `new Date().toISOString().slice(0, 10)` (that's UTC and will flip days for the user).
+  Three slots: morning, evening, and `weekly` (screen-time reminder for the
+  just-completed Sun–Sat week — fires on Sunday, then re-fires once a day as a
+  differently-worded make-up nag while the week stays unlogged, but **never on
+  Saturday**, the day the target week rolls over to the not-yet-loggable current
+  week; mirrors `screenTimeWeekStart`).
 
-- **Row-date semantics differ for sleep vs daily totals.** A row's date D means *the day the user woke up* for sleep fields (`bedtime`, `wake_time`, `sleep_quality`, `sleep_hours`) — all four describe the night ending on morning D. `bedtime` and `wake_time` together are the user-entered sleep window; `sleep_hours` is the Apple Watch's measured duration of that same window. For daily totals (`hrv_avg`, `resting_hr`, `steps`), D is the calendar day the metric was measured, which is why the iOS Shortcut backfills those to D-1 when it runs the next morning. Don't accidentally re-key `sleep_hours` to the night's *start* date — it would silently desync from `sleep_quality` and break the subjective-vs-objective comparison in the Patterns prompt.
+  The Worker's `dueMorning`/`dueEvening` "done" rules must track
+  `isMorningDone`/`isEveningDone` in
+  [src/pages/Dashboard.tsx](src/pages/Dashboard.tsx) — if you change one, change
+  the other. They are currently *not* identical: the Dashboard also requires
+  `wake_time` and `gym_intention` for morning, so a partially-filled morning can
+  show as pending on the dashboard while the Worker suppresses the reminder.
+  Evening (`gym_actual` + `day_quality`) does match.
 
-- **One useEffect, prefill draft, ignore errors gracefully.** Pages that read existing rows (Morning, Evening, Dashboard, Settings) seed their state from Supabase but never throw — if the network or config is broken, the UI still works for fresh input. Follow the `Promise.all + setState + cancel-flag` pattern in [src/pages/Morning.tsx](src/pages/Morning.tsx) or [src/pages/Settings.tsx](src/pages/Settings.tsx) when adding new pages.
+- **Finance: one sync, shared by two runtimes.** `runSync` in
+  [shared/finance/sync.ts](shared/finance/sync.ts) is called by both the manual
+  "Sync now" Pages Function
+  ([functions/api/plaid/sync.ts](functions/api/plaid/sync.ts)) and the daily cron
+  Worker (`financeTick` in [worker/src/index.ts](worker/src/index.ts)), so they
+  can't drift. `shared/finance/` is pure and runtime-agnostic; the two
+  server-only files (`sync.ts`, `plaidApi.ts`) are explicitly **excluded** from
+  [tsconfig.app.json](tsconfig.app.json) so Plaid logic never enters the SPA
+  bundle. Plaid is raw REST in
+  [shared/finance/plaidApi.ts](shared/finance/plaidApi.ts) — **don't add the
+  `plaid` npm SDK**, it's axios/Node-only (same rule as `web-push`).
+  `finance_plaid_items` holds access tokens and has **no anon RLS policy** — it
+  is server-only; never read it from the SPA. Everything else finance lives in
+  [docs/FINANCE.md](docs/FINANCE.md).
 
-- **Patterns has one primary target.** `day_quality` (1–5, captured in the evening via the same `StarRating` as `sleep_quality`) is flagged in [src/pages/Patterns.tsx](src/pages/Patterns.tsx) as the variable Claude should find predictors of. When you add a new tracked field to `entries`, include it as a *predictor* in the Patterns and Morning nudge prompts — don't promote it to a second target. One target keeps the analysis focused. Subjective/objective pairs (e.g. `sleep_quality` 1–5 vs `sleep_hours` from Apple Watch) should be explicitly framed as such in the prompts so Claude can surface discrepancies — both are signal, neither is ground truth. Both prompts share one row builder + field legend in [src/lib/promptData.ts](src/lib/promptData.ts) — add new fields there once, never to just one prompt. Confound flags are framed as *confounders* (explain outliers, discount distorted days), never as goals.
+## Data conventions
 
-- **Deep work is retired (July 2026) but its data is permanent.** The `deep_work_*` columns on `entries` and the `deep_work_rest_budget*` columns on `push_settings` still exist with all May–June data — never drop, rewrite, or repurpose them, and no UI may write them again. The History page ([src/pages/History.tsx](src/pages/History.tsx)) renders the legacy values; the prompts keep `dw_p`/`dw_a` on historical rows with a retirement note in the legend. `focused_work` (`none|light|solid|deep`) is the replacement, asked in the evening flow only from `FOCUSED_WORK_START` (2026-08-15) — its definition text must stay *persistent* helper text on the step, not a tooltip, so scoring stays consistent.
+- **Date keys** are ISO `YYYY-MM-DD` in the user's local timezone. Always go
+  through [src/lib/date.ts](src/lib/date.ts) (`todayKey`, `dayKey`, `lastNDays`,
+  `addDaysKey`, …) — never `new Date().toISOString().slice(0, 10)`, which is UTC
+  and will flip days for the user. The Worker can't import `src/lib/date.ts`
+  (different runtime, no date-fns) and has its own `addDaysKey` doing UTC math on
+  bare key strings; keep it that way.
 
-- **Confound flags are nullable with no default — NULL means "untracked", not "no".** The six booleans (`sick`, `alcohol`, `slept_away`, `travel_day`, `caffeine_late`, `deadline_pressure`) are written as explicit true/false by the evening flow, but only for dates `>= TRACKING_V2_START` (constant in [src/lib/entries.ts](src/lib/entries.ts)). That gate exists because `/evening?date=` is an open URL: without it, re-editing a pre-migration day would stamp `false` onto rows from before the flags were tracked, silently destroying the tracked-vs-untracked distinction the analysis depends on. Any new write path must keep this rule. `slept_away` refers to the night *ending* that morning — same row-date semantics as the sleep fields.
+- **Row-date semantics differ for sleep vs daily totals.** A row's date D is *the
+  day the user woke up* for the sleep fields (`bedtime`, `wake_time`,
+  `sleep_quality`, `sleep_hours`, and `slept_away`) — all describe the night
+  ending on morning D. `bedtime`/`wake_time` are the user-entered window;
+  `sleep_hours` is the Apple Watch's measured duration of that same window. For
+  daily totals (`hrv_avg`, `resting_hr`, `steps`), D is the calendar day the
+  metric was measured, which is why the iOS Shortcut backfills those to D-1 when
+  it runs the next morning. Re-keying `sleep_hours` to the night's *start* date
+  would silently desync it from `sleep_quality` and break the
+  subjective-vs-objective comparison in the prompts.
 
-- **`context_periods` overlap is impossible at the DB level** — a gist EXCLUDE constraint over `daterange(start_date, end_date, '[]')` with *inclusive* bounds, so adjacent periods must not share a day (a new period starts the day after the previous `end_date`; the editor defaults handle this). `end_date` null = currently active (unbounded range). Resolution is client-side via `periodForDate` in [src/lib/contextPeriods.ts](src/lib/contextPeriods.ts). The Dashboard shows a per-day-dismissible banner when today falls in no period; dismissals live in `localStorage` (`ember:ctxDismissed`), never the DB.
+- **Nullable means untracked, not "no."** The six confound flags (`sick`,
+  `alcohol`, `slept_away`, `travel_day`, `caffeine_late`, `deadline_pressure`)
+  have no DB default. The evening flow writes explicit true/false, but only for
+  dates `>= TRACKING_V2_START` ([src/lib/entries.ts](src/lib/entries.ts)). That
+  gate exists because `/evening?date=` is an open URL: without it, re-editing a
+  pre-migration day would stamp `false` onto rows from before the flags were
+  tracked, destroying the tracked-vs-untracked distinction the analysis depends
+  on. `focused_work` has the same shape of gate at `FOCUSED_WORK_START`. **Any
+  new write path must keep this rule**, and any new gated field needs its own
+  `*_START` constant.
 
-- **Screen time is a separate weekly-entered table.** Daily granularity in `screen_time` (one row per date), entered in batches at `/screentime` for the most recently completed Sunday–Saturday week (`screenTimeWeekStart` in [src/lib/date.ts](src/lib/date.ts)) — matching iOS Screen Time's own weekly reset, so on a Sunday entry night every day in the shown week is already done. All-blank days are never written — sparse weeks must stay sparse. "Week logged" everywhere (Dashboard nag card, worker smart-skip) means **≥1 row exists for that Sun–Sat week**, so intentionally partial weeks never nag forever. Phone and computer minutes are deliberately separate columns — merging them would fake a downward trend when scrolling moves between devices.
+- **Deep work is retired (July 2026); its data is permanent.** The `deep_work_*`
+  columns on `entries` and `deep_work_rest_budget*` on `push_settings` still hold
+  all May–June data — never drop, rewrite, or repurpose them, and no UI may write
+  them again. [src/pages/History.tsx](src/pages/History.tsx) renders the legacy
+  values and the prompts keep `dw_p`/`dw_a` on historical rows with a retirement
+  note in the legend; everything else deliberately doesn't select them.
+  `focused_work` (`none|light|solid|deep`) is the replacement — its definition
+  text must stay *persistent* helper text on the evening step, not a tooltip, so
+  scoring stays consistent across months.
 
-- **Gym streak uses a weekly rest budget, resolved per-week from history.** `gymStreak(entries, currentBudget, history?)` in [src/lib/streaks.ts](src/lib/streaks.ts) groups `'no'` days by Mon–Sun calendar week (via `weekStartKey` in [src/lib/date.ts](src/lib/date.ts)); once a week's `'no'` count exceeds *that week's* budget, every `'no'` in that week breaks the streak. The applicable budget for each week is resolved by `budgetForWeek` from `push_settings.rest_budget_history` (an ascending list of `{ from, budget }` entries), falling back to `currentBudget` only when history is empty. Mutating the budget must go through `setRestBudget` in [src/lib/settings.ts](src/lib/settings.ts) — it appends/replaces the entry for the current week and seeds a `2000-01-01` sentinel on first change so weeks before any change stay pinned to the original budget. Don't reduce this back to a single-number signature: the whole point is that changing the budget mid-streak never retroactively breaks past weeks. `GymChoice` is `'yes' | 'no'` — there is no `'rest'` value; that's the budget's job. Any page that displays the streak must load settings alongside entries so the budget and history are available (see [src/pages/Dashboard.tsx](src/pages/Dashboard.tsx)).
+- **Gym streak uses a weekly rest budget, resolved per-week from history.**
+  `gymStreak(entries, currentBudget, history?)` in
+  [src/lib/streaks.ts](src/lib/streaks.ts) groups `'no'` days by Mon–Sun week
+  (`weekStartKey`); once a week's `'no'` count exceeds *that week's* budget, every
+  `'no'` in the week breaks the streak. `budgetForWeek` resolves the applicable
+  budget from `push_settings.rest_budget_history` (ascending `{ from, budget }`
+  entries), falling back to `currentBudget` only when history is empty. Budget
+  changes must go through `setRestBudget` in
+  [src/lib/settings.ts](src/lib/settings.ts) — it appends/replaces the current
+  week's entry and seeds a `2000-01-01` sentinel on first change so earlier weeks
+  stay pinned to the original budget. Don't reduce this to a single-number
+  signature: the whole point is that changing the budget mid-streak never
+  retroactively breaks past weeks. `GymChoice` is `'yes' | 'no'` — there is no
+  `'rest'` value (the DB check constraint still allows it for legacy rows); rest
+  is the budget's job. Any page showing the streak must load settings alongside
+  entries.
 
-- **No comments restating what the code does.** Comments only explain *why* — a non-obvious constraint, a deliberate skip, a workaround. See the existing files for tone.
+- **Screen time is a separate weekly-entered table.** Daily granularity in
+  `screen_time`, entered in batches at `/screentime` for the most recently
+  completed Sunday–Saturday week (`screenTimeWeekStart`) — matching iOS Screen
+  Time's own weekly reset, so on a Sunday entry night every day shown is already
+  done. All-blank days are never written; sparse weeks must stay sparse. "Week
+  logged" everywhere (Dashboard nag card, Worker smart-skip) means **≥1 row
+  exists for that Sun–Sat week**, so intentionally partial weeks never nag
+  forever. Phone and computer minutes are deliberately separate columns —
+  merging them would fake a downward trend when scrolling moves between devices.
+
+- **`context_periods` overlap is impossible at the DB level** — a gist EXCLUDE
+  constraint over `daterange(start_date, end_date, '[]')` with *inclusive*
+  bounds, so adjacent periods must not share a day (a new period starts the day
+  after the previous `end_date`; the editor defaults handle this). `end_date`
+  null = currently active. Resolution is client-side via `periodForDate`. The
+  Dashboard shows a per-day-dismissible banner when today falls in no period;
+  dismissals live in `localStorage` (`ember:ctxDismissed`), never the DB.
+
+- **Finance amounts: inflow positive, outflow negative.** Plaid's convention is
+  the opposite — invert on ingest. **Savings rates** read off a per-transaction
+  `savings_bucket` (`short_term`/`long_term`/`retirement`) — the single source of
+  truth, so a transfer is counted exactly once regardless of which side is
+  connected.
+
+## Code conventions
+
+- **Styling: hand-rolled CSS, no framework.** Each component and page has a
+  sibling `.css` file. Class names are BEM-ish and component-prefixed
+  (`.stars__btn`, `.qcard__question`). Theme tokens live in
+  [src/styles/theme.css](src/styles/theme.css) — **never hardcode a color**; use
+  `var(--amber)`, `var(--card)`, etc. Adding a new color means adding a token,
+  not a one-off hex.
+
+- **Journal-flow primitive.** Morning and Evening share one pattern: a `Step`
+  union, a `draft` object, a `QuestionCard` per step with framer-motion fade,
+  `ProgressDots` up top, `morning__primary` / `morning__ghost` buttons at the
+  bottom, and an `isValid(step, draft)` gate on Next. Evening imports
+  `Morning.css` for the shared layout classes. If you build a third flow, factor
+  out a `CheckInFlow` controller — don't fork the layout a third time.
+
+- **One useEffect, prefill draft, degrade gracefully.** Pages that read existing
+  rows (Morning, Evening, Dashboard, Settings, Finance) seed state from Supabase
+  but never throw — if the network or config is broken, the UI still works for
+  fresh input. Follow the `Promise.all` + `setState` + cancel-flag pattern in
+  [src/pages/Morning.tsx](src/pages/Morning.tsx). Where the distinction matters,
+  `null` state means "fetch failed" and hides the feature, rather than falsely
+  claiming nothing is logged (see `periods` / `screenWeek` in Dashboard).
+
+- **Patterns has exactly one target.** `day_quality` (1–5, captured in the
+  evening) is what Claude looks for predictors of. A new tracked field is always
+  a *predictor* — never promote it to a second target. Subjective/objective pairs
+  (e.g. `sleep_quality` vs `sleep_hours`) must be framed as such in the prompts
+  so Claude can surface discrepancies; both are signal, neither is ground truth.
+  Confound flags are framed as *confounders* (explain outliers, discount
+  distorted days), never as goals.
+
+- **No comments restating what the code does.** Comments explain *why* — a
+  non-obvious constraint, a deliberate skip, a workaround. Match the tone of the
+  existing files.
+
+## How to make changes
+
+Every recipe ends the same way: run `npm run build` from the repo root.
+
+### Add a tracked field to `entries`
+
+1. Add the column in a new idempotent `supabase/*.sql` migration
+   (`alter table ... add column if not exists`). **Nullable, no default** — a
+   default destroys the untracked-vs-false distinction.
+2. Add it to the `Entry` interface in [src/lib/entries.ts](src/lib/entries.ts).
+   `getEntry`/`getRange` select `*`, so nothing else changes there.
+3. If it's asked from a start date, add a `*_START` constant next to
+   `TRACKING_V2_START` and gate **both** the step list and the save payload on
+   `targetDate >= START`.
+4. Add the question step to Morning or Evening (recipe below).
+5. Add it to **both** the row builder and `FIELD_LEGEND` in
+   [src/lib/promptData.ts](src/lib/promptData.ts) — one edit covers the Patterns
+   analysis and the morning nudge, which is exactly why they share the module.
+   Use a short key; the legend must state units and the null semantics.
+6. Optionally surface it on History / Dashboard.
+
+### Add a question step to a check-in flow
+
+In [src/pages/Morning.tsx](src/pages/Morning.tsx) or
+[src/pages/Evening.tsx](src/pages/Evening.tsx): extend the `Step` union and the
+questions list, add the field to the `Draft*` interface and its initial state,
+seed it in the prefill `useEffect`, render a `QuestionCard` branch in `StepView`
+using an existing input primitive, add a `case` to `isValid` (return `true` if
+optional), and include it in the `submit()` patch. `ProgressDots` reads the
+questions array length, so it updates itself.
+
+### Add a page / route
+
+Create `src/pages/Name.tsx` + `Name.css`, register it in
+[src/App.tsx](src/App.tsx) above the catch-all redirect, and link to it from the
+Dashboard header. Follow the prefill-and-degrade `useEffect` pattern.
+
+### Add a Supabase table the SPA writes
+
+1. Idempotent migration: `create table if not exists`, `enable row level
+   security`, and **three permissive `anon` policies — SELECT, INSERT, UPDATE**
+   (plus DELETE if the SPA deletes). See the RLS gotcha below for why SELECT is
+   non-negotiable.
+2. New `src/lib/<table>.ts` exporting an interface, a `COLUMNS` string, and
+   read/write functions. No component touches `supabase.from` directly.
+3. If the cron Worker needs it, it reads with the secret key and bypasses RLS —
+   nothing extra to configure.
+
+### Add a component
+
+`src/components/Name.tsx` + `Name.css`, default export, `ariaLabel` prop if it's
+an input, tokens from `theme.css` for every color. Finance-only components go in
+`src/components/finance/`.
+
+### Change what Claude sees or says
+
+- Model, `max_tokens` default, vision handling: `MODEL` and the request body in
+  [functions/api/claude.ts](functions/api/claude.ts).
+- Shared data and legend for both prompts:
+  [src/lib/promptData.ts](src/lib/promptData.ts).
+- Prompt wording: `buildNudgePrompt` in Morning, `buildPrompt` in
+  [src/pages/Patterns.tsx](src/pages/Patterns.tsx), the extraction prompt in
+  [src/lib/finance/extract.ts](src/lib/finance/extract.ts).
+- Requires `npm run pages:dev` to exercise — `npm run dev` has no `/api/*`.
+
+### Change notification behavior
+
+Edit [worker/src/index.ts](worker/src/index.ts) (`dueMorning`, `dueEvening`,
+`dueWeekly`, `payloadFor`), then `cd worker && npm run tick` to fire the
+scheduled handler immediately, or hit `/?force=morning|evening|weekly|finance` on
+the deployed Worker. If you touch a "done" rule, check the matching
+`isMorningDone`/`isEveningDone` in Dashboard. New settings columns need adding to
+both the Worker's `Settings` interface + its select list and the SPA's
+`PushSettings` + `COLUMNS` in [src/lib/settings.ts](src/lib/settings.ts).
+
+### Add a finance category or classification rule
+
+Categories are a closed union in
+[shared/finance/types.ts](shared/finance/types.ts) plus `CATEGORIES` /
+`CATEGORY_LABELS` in [shared/finance/categories.ts](shared/finance/categories.ts)
+and the Plaid mapping tables there. Classification logic is
+[shared/finance/classify.ts](shared/finance/classify.ts), data-driven off
+`finance_settings.cc_payment_payee`. A re-sync **never clobbers a transaction the
+user has `reviewed`** (the preserve branch in `upsertTransactions`), and account
+`include_in_net_worth` toggles are likewise preserved — keep both invariants.
+User-authored rules live in `finance_rules` and are created from the transaction
+editor, not in code.
+
+### Add an env var or secret
+
+Decide the runtime first. `VITE_*` → `.env` **and** Cloudflare Pages env vars
+(build-time, ends up in the bundle — never a secret). Pages Function server var →
+`.dev.vars` locally, Pages dashboard in production. Cron Worker → `npx wrangler
+secret put NAME` from `worker/`, and add it to the `Env` interface in
+`worker/src/index.ts`. Document it in [README.md](README.md) or
+[docs/FINANCE.md](docs/FINANCE.md) and add a placeholder to `.env.example` if
+it's a `VITE_*`.
 
 ## Workflow
 
 ```bash
-npm run dev              # SPA only, no /api/claude
-npm run build            # tsc -b && vite build, outputs to dist/
-npm run pages:dev        # wrangler pages dev dist — needed to exercise the Anthropic proxy
+npm run dev              # SPA only — /api/* 404s
+npm run build            # tsc -b && vite build → dist/
+npm run pages:dev        # wrangler pages dev dist — needed for /api/claude and /api/plaid
 
 cd worker && npm run dev     # wrangler dev — local cron Worker
-cd worker && npm run tick    # wrangler dev --test-scheduled — fires the scheduled handler immediately
+cd worker && npm run tick    # wrangler dev --test-scheduled — fires the scheduled handler now
 cd worker && npm run deploy  # wrangler deploy
 ```
 
-For the function locally, drop `ANTHROPIC_API_KEY=...` into `.dev.vars` (gitignored). For Supabase, `.env` with `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_VAPID_PUBLIC_KEY`.
+Local env: `.env` for `VITE_*` (see `.env.example`), `.dev.vars` for server-side
+Function vars (`ANTHROPIC_API_KEY`, `PLAID_*`, `SUPABASE_SERVICE_KEY`). Both are
+gitignored.
 
-After changes, **always run `npm run build`** from the project root — `tsc -b` typechecks all four sub-projects (SPA, Pages Function, service worker, cron Worker) via the references in [tsconfig.json](tsconfig.json), then Vite + PWA produces the output. A passing build is the signal of correctness; there is no test suite by design (single-user, low blast radius).
+**After any change, run `npm run build` from the repo root.** `tsc -b`
+typechecks all four sub-projects via the references in
+[tsconfig.json](tsconfig.json), then Vite + PWA produces the output. A passing
+build is the correctness signal — there is no test suite by design (single user,
+low blast radius). Worker-only changes are covered too: the root solution
+references `worker/`, so run the root build for those as well.
 
 ## Gotchas
 
-- The `VITE_` prefix matters. `VITE_*` env vars are bundled into the client; everything else is server-side only. Don't move the Anthropic key into a `VITE_*` var "for convenience."
-- **Service worker is hand-written** at [src/sw.ts](src/sw.ts) (`injectManifest` strategy). Workbox precaching + runtime caching rules live in that file now — **not in [vite.config.ts](vite.config.ts)**. If you add a new cached route, edit `src/sw.ts`. `/api/*` is `NetworkOnly` there for a reason; don't cache Anthropic responses.
-- The SW still uses `registerType: 'autoUpdate'` with `registerSW({ immediate: true })` (in [src/main.tsx](src/main.tsx)). On any deploy, the next navigation refreshes — no in-app prompt. Don't add one.
-- **iOS push only works inside the home-screen-installed PWA**, not Safari tabs. `pushSupport()` in [src/lib/push.ts](src/lib/push.ts) gates the Settings toggle on `display-mode: standalone` || `navigator.standalone` for exactly this reason. Don't remove that check.
-- **`VITE_VAPID_PUBLIC_KEY` must be set in Cloudflare Pages env vars**, not just `.env` — `.env` is local-only. Build succeeds without it; the Settings toggle just stays disabled with a banner. Same `VITE_*` build-time pattern as the Supabase vars.
-- **Worker secrets live in Wrangler, not `.env`**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SUPABASE_URL`, `SUPABASE_KEY` are all set via `npx wrangler secret put` from `worker/`. Verify with `wrangler secret list`.
-- **Cron runs every 5 minutes, not at the configured times.** The Worker checks the user's local time inside the handler via `Intl.DateTimeFormat`. This is deliberate so DST flips don't require code changes; don't switch to per-time cron expressions or you'll create a twice-yearly maintenance burden.
-- Recharts dominates the bundle (~260kB gzipped total). Don't add another charting library; reuse the existing chart components or extend them.
-- **Two Supabase keys, two roles, RLS is on.** RLS is enabled on `entries`, `push_settings`, and `push_subscriptions`. The SPA uses a **publishable key** (`sb_publishable_...`, in `VITE_SUPABASE_ANON_KEY`) that's subject to policy. The cron Worker uses a **secret key** (`sb_secret_...`, in the `SUPABASE_KEY` Wrangler secret) that bypasses RLS — necessary because the Worker has no user session and would otherwise read zero rows. Never paste the secret key into a `VITE_*` var or `.env` — it must live only in Wrangler. If you rotate keys, stay on the new `sb_publishable_` / `sb_secret_` system; the legacy `anon` / `service_role` JWTs share a JWT secret and can't be rotated independently.
-
-- **Every SPA-writable table needs `anon` policies for SELECT *and* INSERT *and* UPDATE — not just the operations you think you're using.** `supabase-js` chains `.select()` after `upsert()` in this codebase (see [src/lib/settings.ts](src/lib/settings.ts), [src/lib/entries.ts](src/lib/entries.ts)), which sends `Prefer: return=representation` and triggers a SELECT-after-write to return the row. With RLS on, that post-write SELECT is evaluated against `anon`'s SELECT policy. If only INSERT/UPDATE policies exist for `anon`, the operation passes write evaluation but fails the SELECT-back and returns `401 / PostgREST error=42501` — the same shape as a denied write, which makes it easy to misdiagnose as a missing INSERT policy. When you add a new SPA-writable table, create three permissive policies for `anon`: SELECT, INSERT, and UPDATE (plus DELETE if the table is ever deleted from the client). Supabase dashboard templates default to `authenticated` roles, which won't help you — the publishable key authenticates as `anon`, not `authenticated`.
+- **The `VITE_` prefix matters.** `VITE_*` vars are bundled into the client;
+  everything else is server-side only. Don't move the Anthropic key, a Plaid
+  secret, or the Supabase secret key into a `VITE_*` var "for convenience."
+- **Two Supabase keys, two roles, RLS is on everywhere.** The SPA uses a
+  **publishable** key (`sb_publishable_…`, in `VITE_SUPABASE_ANON_KEY`) that
+  authenticates as `anon` and is subject to policy. The cron Worker and the Plaid
+  Functions use a **secret** key (`sb_secret_…`) that bypasses RLS — necessary
+  because they have no user session and would otherwise read zero rows. The
+  secret key lives only in Wrangler secrets and the Pages dashboard. If you
+  rotate, stay on the `sb_publishable_`/`sb_secret_` system; the legacy
+  `anon`/`service_role` JWTs share a signing secret and can't be rotated
+  independently.
+- **Every SPA-writable table needs `anon` SELECT *and* INSERT *and* UPDATE — not
+  just the verbs you think you're using.** `supabase-js` chains `.select()` after
+  `upsert()` throughout this codebase, which sends `Prefer: return=representation`
+  and triggers a SELECT-after-write. With RLS on, that post-write SELECT is
+  evaluated against `anon`'s SELECT policy; with only INSERT/UPDATE policies the
+  write passes but the read-back fails with `401 / PostgREST 42501` — the same
+  error shape as a denied write, which makes it easy to misdiagnose. Supabase
+  dashboard policy templates default to the `authenticated` role, which won't
+  help you: the publishable key is `anon`.
+- **Service worker is hand-written** at [src/sw.ts](src/sw.ts) (`injectManifest`).
+  Workbox precaching and runtime caching rules live *in that file*, **not in
+  [vite.config.ts](vite.config.ts)**. `/api/*` is `NetworkOnly` there on purpose;
+  don't cache Anthropic or Plaid responses.
+- **`skipWaiting()` + `clientsClaim()` in the SW are load-bearing.** iOS
+  backgrounds the home-screen PWA instead of closing it, so without them a new
+  deploy's SW sits "waiting" forever and the app is stuck on a stale bundle.
+  Combined with `registerType: 'autoUpdate'` and `registerSW({ immediate: true })`
+  in [src/main.tsx](src/main.tsx), the next navigation after a deploy refreshes —
+  don't add an in-app update prompt.
+- **iOS push only works inside the home-screen-installed PWA**, not Safari tabs.
+  `pushSupport()` in [src/lib/push.ts](src/lib/push.ts) gates the Settings toggle
+  on `display-mode: standalone` || `navigator.standalone` for exactly this
+  reason. Don't remove that check. `subscribe()` rolls back the browser
+  subscription if the DB write fails, so the toggle never lies.
+- **`VITE_VAPID_PUBLIC_KEY` must be set in the Cloudflare Pages env vars**, not
+  just `.env` — `.env` is local-only. The build succeeds without it; the Settings
+  toggle just stays disabled with a banner.
+- **Cron runs every 5 minutes, not at the configured times.** The Worker checks
+  the user's local time inside the handler via `Intl.DateTimeFormat`. This is
+  deliberate so DST flips need no code change; don't switch to per-time cron
+  expressions or you'll create a twice-yearly maintenance burden.
+- **The weather snapshot is independent of push.** It runs once per local day
+  whenever coords are set, even if no subscription exists or the morning push was
+  smart-skipped. Don't fold it back into the send path.
+- **Apple Card's account id is `csv-apple-card` and its `source` is `'csv'`**
+  even though CSV import no longer exists (screenshots replaced it). Those are
+  frozen strings keeping existing rows joined — don't rename them.
+- Recharts dominates the bundle (~290kB gzipped total). Don't add another
+  charting library; reuse or extend the existing chart components.

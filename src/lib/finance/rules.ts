@@ -18,16 +18,6 @@ export async function getRules(): Promise<FinanceRule[]> {
   return (data ?? []) as FinanceRule[]
 }
 
-export async function createRule(rule: NewRule): Promise<FinanceRule> {
-  const { data, error } = await supabase
-    .from('finance_rules')
-    .insert({ ...rule, match_text: rule.match_text.trim().toLowerCase() })
-    .select()
-    .single()
-  if (error) throw error
-  return data as FinanceRule
-}
-
 /**
  * Create or replace the rule for a given match_text. Keyed on match_text so
  * re-learning a Brokerage destination (or re-saving the same "always classify"

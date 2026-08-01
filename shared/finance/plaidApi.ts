@@ -119,10 +119,3 @@ export function getLiabilities(env: PlaidEnv, accessToken: string) {
     liabilities: { student?: StudentLoan[] | null } | null
   }>(env, '/liabilities/get', { access_token: accessToken })
 }
-
-export function getInstitution(env: PlaidEnv, institutionId: string) {
-  return plaidPost<{ institution: { name: string } }>(env, '/institutions/get_by_id', {
-    institution_id: institutionId,
-    country_codes: ['US']
-  })
-}

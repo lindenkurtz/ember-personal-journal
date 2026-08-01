@@ -1,8 +1,9 @@
 # Finance feature — setup & operations
 
 A personal finance dashboard at `/finance`: Plaid-synced balances/transactions,
-Apple Card CSV import, transaction classification + review queue, and net-worth
-snapshots charted over time. Pure visibility — no budgets or alerts.
+Apple Card / Apple Cash import by screenshot, transaction classification +
+review queue, and net-worth snapshots charted over time. Pure visibility — no
+budgets or alerts.
 
 ## One-time setup
 
@@ -62,15 +63,21 @@ npx wrangler secret put PLAID_ENV
   the Plaid category map. User edits on a `reviewed` row are never clobbered by
   a re-sync.
 - **Net worth** = included asset balances − Servicer, snapshotted each sync.
-- **Apple Card** is CSV-first ([src/lib/finance/csv.ts](../src/lib/finance/csv.ts)),
-  excluded from net worth. Import via the page's "Import Apple Card CSV" button;
-  re-importing the same export is a no-op (deterministic ids).
-- **Apple Card / Apple Cash via screenshot** ([src/lib/finance/extract.ts](../src/lib/finance/extract.ts)):
-  pick the account, upload screenshots of the Wallet/card.apple.com transaction
-  list, and Claude (through the `/api/claude` vision proxy) returns rows tagged
-  with our categories. You review them, then confirm to insert (same content-hash
-  dedup). Cost is ~2¢/screenshot on Sonnet 4.6. The screenshot image is sent to
-  the Anthropic API via your own proxy.
+- **Apple Card / Apple Cash are screenshot-only.** Plaid can't reach them and,
+  as a Family participant, the user can't CSV-export either. Both are synthetic
+  accounts defined in [src/lib/finance/localAccounts.ts](../src/lib/finance/localAccounts.ts)
+  and excluded from net worth (Apple Card isn't the user's liability; Apple Cash
+  has no connected balance to snapshot) — their transactions still feed spending
+  and cash flow. To import: **Add from screenshot** on `/finance`, pick the
+  account, upload screenshots of the Wallet / card.apple.com transaction list.
+  Claude (through the `/api/claude` vision proxy,
+  [src/lib/finance/extract.ts](../src/lib/finance/extract.ts)) returns rows tagged
+  with our categories; you review them, then confirm to insert. Re-importing the
+  same screenshot is a no-op — ids are a content hash
+  ([src/lib/finance/hash.ts](../src/lib/finance/hash.ts)). Cost is ~2¢/screenshot.
+  Note the Apple Card account id is still `csv-apple-card` and its `source` is
+  `'csv'`: those are frozen strings that keep existing rows joined, not a live
+  CSV path. Don't "fix" them.
 - **Savings rates** are read off each transaction's `savings_bucket`
   (`short_term` = Brokerage Emergency, `long_term` = Investments/Savings,
   `retirement` = Roth IRA). It auto-sets when money lands in a matched Brokerage
@@ -85,6 +92,8 @@ npx wrangler secret put PLAID_ENV
    `user_good` / `pass_good`.
 3. **Sync now** → confirm balances, transactions, a net-worth snapshot, and that
    Venmo/peer items land in the review queue.
-4. Import a sample Apple Card CSV → rows appear, balance excluded from net worth.
+4. **Add from screenshot** with any Apple Card / Apple Cash screenshot → rows
+   appear in the review sheet; confirm, then re-upload the same image and check
+   that nothing duplicates.
 5. Daily cron: `cd worker && npm run tick`, then hit `/?force=finance` to fire a
    sync immediately; a second call the same day is a no-op (dedup).

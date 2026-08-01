@@ -71,12 +71,6 @@ export function categoryBreakdown(txns: FinanceTransaction[]): CategorySlice[] {
     .sort((a, b) => b.total - a.total)
 }
 
-export function subscriptionsTotal(txns: FinanceTransaction[]): number {
-  return txns
-    .filter((t) => t.category === 'subscriptions' && t.amount < 0)
-    .reduce((sum, t) => sum + -t.amount, 0)
-}
-
 export interface SavingsRates {
   shortTerm: number // Brokerage Emergency
   longTerm: number // Brokerage Savings/Investments

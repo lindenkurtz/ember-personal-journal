@@ -51,7 +51,16 @@ export async function subscribe(): Promise<PushSubscription> {
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
   })
-  await persist(sub)
+  try {
+    await persist(sub)
+  } catch (e) {
+    // Never leave a browser subscription that isn't recorded server-side:
+    // getSubscription would then report "on" after a restart while the cron
+    // Worker has no row to send to. Roll back so the failure is honest and
+    // retryable on the next toggle.
+    await sub.unsubscribe().catch(() => {})
+    throw e
+  }
   return sub
 }
 

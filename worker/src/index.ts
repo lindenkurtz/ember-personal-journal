@@ -135,7 +135,9 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
     await fire(supabase, env, 'evening', dateKey)
   }
   if (force === 'weekly' || (await dueWeekly(supabase, settings, hhmm, dateKey, weekday))) {
-    await fire(supabase, env, 'weekly', dateKey)
+    // Sunday is the on-time prompt; any later day the week is still unlogged is
+    // a make-up nag, which reads differently.
+    await fire(supabase, env, 'weekly', dateKey, weekday !== 'Sunday')
   }
 }
 
@@ -154,10 +156,18 @@ function dueEvening(s: Settings, hhmm: string, dateKey: string, e: Entry | null)
   return !(e && e.gym_actual !== null && e.day_quality !== null)
 }
 
-// Weekly screen-time reminder: Sunday at weekly_time. Smart-skips when any day
-// of the target week (last Sun..Sat, the just-completed week per iOS Screen
-// Time's own weekly reset) is already logged; like the daily slots, a skip
-// does NOT write last_weekly_sent.
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6
+}
+
+// Weekly screen-time reminder for the just-completed Sun..Sat week. Fires first
+// on Sunday at weekly_time (the on-time prompt) and re-fires once each following
+// day the week is still unlogged (a make-up nag) — Saturday is excluded because
+// that's the day the target week rolls over to the not-yet-loggable current
+// week (mirrors screenTimeWeekStart in the SPA). Smart-skips when any day of the
+// target week already has a row; like the daily slots, a skip does NOT write
+// last_weekly_sent, and the per-day dedupe on last_weekly_sent caps it at once a
+// day.
 async function dueWeekly(
   supabase: SupabaseClient,
   s: Settings,
@@ -165,14 +175,18 @@ async function dueWeekly(
   dateKey: string,
   weekday: string
 ): Promise<boolean> {
-  if (weekday !== 'Sunday') return false
+  if (weekday === 'Saturday') return false
   if (s.last_weekly_sent === dateKey) return false
   if (hhmm < s.weekly_time) return false
+  // Sunday of the just-completed week: back up to this week's Sunday, then a
+  // further week. Sun–Fri all resolve to the same window, so make-up nags stay
+  // pinned to the week that was due last Sunday.
+  const weekStart = addDaysKey(dateKey, -(WEEKDAY_INDEX[weekday] + 7))
   const { data, error } = await supabase
     .from('screen_time')
     .select('date')
-    .gte('date', addDaysKey(dateKey, -7))
-    .lte('date', addDaysKey(dateKey, -1))
+    .gte('date', weekStart)
+    .lte('date', addDaysKey(weekStart, 6))
     .limit(1)
   if (error) throw error
   return (data ?? []).length === 0
@@ -188,7 +202,13 @@ async function getEntry(supabase: SupabaseClient, date: string): Promise<Entry |
   return (data as Entry | null) ?? null
 }
 
-async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: string): Promise<void> {
+async function fire(
+  supabase: SupabaseClient,
+  env: Env,
+  slot: Slot,
+  dateKey: string,
+  makeup = false
+): Promise<void> {
   const { data: subs, error } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
@@ -204,7 +224,7 @@ async function fire(supabase: SupabaseClient, env: Env, slot: Slot, dateKey: str
     privateKey: env.VAPID_PRIVATE_KEY,
     subject: env.VAPID_SUBJECT
   }
-  const payload = JSON.stringify(payloadFor(slot))
+  const payload = JSON.stringify(payloadFor(slot, makeup))
 
   const results = await Promise.allSettled(
     list.map((sub) => sendPush(sub, payload, vapid).then((r) => ({ sub, r })))
@@ -263,7 +283,7 @@ async function fetchAndStoreWeather(
   }
 }
 
-function payloadFor(slot: Slot): { title: string; body: string; tag: Slot; url: string } {
+function payloadFor(slot: Slot, makeup = false): { title: string; body: string; tag: Slot; url: string } {
   if (slot === 'morning') {
     return {
       title: 'Morning check-in',
@@ -275,7 +295,9 @@ function payloadFor(slot: Slot): { title: string; body: string; tag: Slot; url: 
   if (slot === 'weekly') {
     return {
       title: 'Screen time',
-      body: "Log last week's phone and computer time.",
+      body: makeup
+        ? "Last week's phone and computer time still needs logging."
+        : "Log last week's phone and computer time.",
       tag: 'weekly',
       url: '/'
     }

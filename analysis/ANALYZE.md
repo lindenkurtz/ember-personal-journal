@@ -4,10 +4,12 @@
 
 ## Paste this into the chat
 
-> I've uploaded an export from my personal daily-tracking app. Read `CONTEXT.md`
-> first — it has the data dictionary, known quality problems, and the cleaning rules
-> I've already settled on. Then read `FINDINGS.md`, which lists what's already been
-> tested.
+> I've uploaded a zipped export from my personal daily-tracking app. Unzip it, then
+> read `CONTEXT.md` **and** `ANALYZE.md` in full before touching any data —
+> `CONTEXT.md` has the data dictionary, known quality problems, and the cleaning
+> rules I've already settled on, and `ANALYZE.md` has the protocol I want you to
+> follow. Then read `FINDINGS.md`, which lists what's already been tested. Confirm
+> you've read all three before starting.
 >
 > Follow the protocol in `ANALYZE.md`: re-test the confirmatory register first, then
 > do an exploratory pass clearly labeled as hypothesis-generating. Use

@@ -136,8 +136,9 @@ docs/FINANCE.md       finance setup + operations
   (gitignored), and copies [analysis/CONTEXT.md](analysis/CONTEXT.md),
   [analysis/FINDINGS.md](analysis/FINDINGS.md) and
   [analysis/ANALYZE.md](analysis/ANALYZE.md) in beside a freshly generated
-  `MANIFEST.md`. The bundle is uploaded to a Claude chat by hand; it never goes
-  through `/api/claude`, and nothing about it ships in the app.
+  `MANIFEST.md`. The folder is zipped alongside itself and the zip is uploaded to
+  a Claude chat by hand; it never goes through `/api/claude`, and nothing about it
+  ships in the app.
 
   Three things to keep true:
   - **`buildDaily`'s cleaning rules and CONTEXT.md's "Derived fields" /

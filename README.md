@@ -283,7 +283,8 @@ FINDINGS.md        what's already been tested, and whether it held up
 ANALYZE.md         the protocol, and the prompt to paste into the chat
 ```
 
-Upload the folder's contents to a new chat and paste the prompt at the top of
+The folder is zipped alongside itself as `ember-YYYY-MM-DD.zip` — upload that to a
+new chat and paste the prompt at the top of
 [analysis/ANALYZE.md](analysis/ANALYZE.md). At the end of the run, paste the
 updated findings block back into [analysis/FINDINGS.md](analysis/FINDINGS.md) —
 that file is what makes this a running experiment rather than a series of

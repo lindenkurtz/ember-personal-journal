@@ -4,99 +4,80 @@
 
 ## Paste this into the chat
 
-> I've uploaded a zipped export from my personal daily-tracking app. Unzip it, then
-> read `CONTEXT.md` **and** `ANALYZE.md` in full before touching any data —
-> `CONTEXT.md` has the data dictionary, known quality problems, and the cleaning
-> rules I've already settled on, and `ANALYZE.md` has the protocol I want you to
-> follow. Then read `FINDINGS.md`, which lists what's already been tested. Confirm
-> you've read all three before starting.
+> I've uploaded a zipped export from my personal daily-tracking app. Unzip it and
+> read `CONTEXT.md` before touching the data — it has the data dictionary and the
+> known quality problems. Skim `ANALYZE.md` for what I want out of this, and
+> `FINDINGS.md` for what's already been looked at.
 >
-> Follow the protocol in `ANALYZE.md`: re-test the confirmatory register first, then
-> do an exploratory pass clearly labeled as hypothesis-generating. Use
-> `daily_merged.csv` as the primary table.
+> Then explore the data and build me an HTML dashboard presenting some analysis + 
+> some of my patterns + whatever else is interesting/impactful.
 >
-> Finish with an HTML dashboard and an updated findings block I can paste back into
-> `FINDINGS.md`.
->
-> Be skeptical. I'd rather hear "this dissolved under controls" than a list of
-> impressive-looking correlations.
+> Be skeptical, use plain language, and put a sample size next to anything you claim.
 
-For a targeted question instead, swap the last two paragraphs for the question — but
-still ask it to read `CONTEXT.md` first, or it will re-derive fields that are already
-in `daily_merged.csv` and use different cleaning rules than the last run.
+For a targeted question, replace the middle line with the question. Still point at
+`CONTEXT.md` first, or the cleaning rules get re-invented differently each run.
 
 ---
 
-## Protocol
+## What this is for
 
-### Step 0 — Orient
-Read `CONTEXT.md` and `FINDINGS.md`. Check `MANIFEST.md` for the date range and
-per-column coverage. **Flag any column whose coverage dropped since the last run** —
-that's a logging failure worth catching early, and it's the kind of thing that
-silently ruins a dataset for months.
+A picture of how I've actually been living — sleep, training, food, phone, mood,
+and how they move together. Interesting is as valuable as significant. I draw my
+own conclusions from it; the dashboard's job is to show me what's there, not to
+tell me what to change.
 
-### Step 1 — Data quality check
-Before any statistics:
-- New missing days? Coverage changes? New impossible values?
-- Has the Apple Health sync problem resolved (coverage up, sign problem reversed)?
-- Any column that has quietly gone constant — the `deep_work` failure mode?
+Organize around what the data actually shows. Let the sections come from the data,
+not from a template: probably some by area (sleep, gym, food, body) and some by
+relationship (sleep vs. gym, food vs. sleep, phone vs. bedtime). Cross-dataset
+connections are often the most interesting part — go looking for them.
 
-Report this first. A logging problem found early is worth more than any correlation.
+Compare across months, contexts, seasons, or whatever period fits what you're
+showing. Don't organize around "what changed since the last run" — the gap between
+runs is arbitrary and usually too short to mean anything.
 
-### Step 2 — Confirmatory tests
-Re-run every hypothesis in the confirmatory register, using the method specified
-there. For each, report: n, raw r, detrended r, r with the specified controls, and
-whether it still holds. Compare against the baseline in `FINDINGS.md` and say whether
-it strengthened, weakened, or dissolved.
+## What makes it good
 
-**These are the results that carry weight**, because they were specified before
-seeing this run's data.
+**Plain language.** Report r and n and p — those matter — but say what a result
+means in a sentence. "Holds up on this sample" and "only 5 days on the smaller
+side, unreadable" beat a table of partial correlations. Skip the jargon that
+doesn't change what the reader does with the number.
 
-### Step 3 — Exploratory pass
-Now hunt. Scan across the numeric columns, look at new fields, check interactions.
+**Good charts.** A distribution, a day-of-week breakdown, a timeline with the
+notable days marked — simple charts carry a lot. A well-chosen number with context
+around it is often better than a chart. Make it something worth looking at.
 
-Requirements:
-- **State how many tests you ran** and apply FDR correction.
-- Detrend anything before believing it.
-- **Label everything here as hypothesis-generating, not findings.** A promising
-  exploratory result goes onto the confirmatory list to be tested on future data —
-  it does not get reported as a discovery.
-- Watch for the gym confound specifically (see `CONTEXT.md`).
+**Honest sizing.** Every claim carries its n. Say plainly when something is too
+thin to read. A short section that says "not enough data yet" is fine.
 
-### Step 4 — Free-text notes
-Read the `note` column. In run 1 this resolved two mysteries that no amount of
-statistics would have: why the deep-work field died, and when nutrition logging
-started. Notes explain outliers. Read them.
+**Proportion.** Big, well-supported patterns get space. A narrow result on 20 days
+gets a few sentences, however statistically clean it is.
 
-### Step 5 — Output
+## Rigor, mostly invisible
 
-**A. HTML dashboard**, single self-contained file. Sections in this order:
-1. Data quality — coverage, gaps, anything that regressed
-2. Confirmatory results — each hypothesis with its history and current status
-3. Exploratory — clearly marked as speculative
-4. Trajectory — weight, lifts, whatever's tracking over time
-5. Open questions
+Do the work, show the conclusion:
 
-Keep every reported n visible next to its correlation. Charts over tables where a
-trend matters. No conclusion without its sample size attached.
+- Detrend against `day_index` before trusting a correlation — some in this dataset
+  are shared time trends.
+- Control for `gym` when testing nutrition; intake runs higher on gym days.
+- Correct for multiple comparisons when scanning many pairs. Say how many you ran.
+- Prefer Spearman or a permutation test for the 1–5 ratings at small n.
+- Never claim causation. Name the plausible confound in a sentence.
 
-**B. An updated findings block** to paste back into `FINDINGS.md`: a new run-log line,
-status updates for each confirmatory hypothesis, any promotions from exploratory to
-confirmatory, and anything newly dissolved.
+The reader doesn't need every control step rendered. If something dissolves under
+controls, say it dissolved and move on.
 
-Step 5B is what makes this a system rather than a series of disconnected analyses.
-Don't skip it.
+## Data quality
 
----
+Check coverage and look for impossible values, columns that have quietly gone
+constant, and logging that stopped. Report it briefly near the top — a few lines,
+not a section. I'll usually already know; it's context for reading the rest, not a
+finding. Never silently drop a bad value: flag it with its date so I can fix it at
+the source.
 
-## Standing cautions
+## Output
 
-- **Small n.** Coverage varies enormously by column. Report it every time.
-- **Repeated testing across runs.** The same variable pairs get scanned every run, so
-  something will cross p < .05 by chance eventually. This is exactly why the
-  confirmatory/exploratory split exists — respect it.
-- **Everything is observational.** Never claim causation. Name the plausible confound.
-- **Subjective ratings are 1–5 ordinals** with limited range, especially `day_quality`.
-  A null result there may be a measurement ceiling, not an absence of effect.
-- **Don't let a good story override a weak result.** If something dissolves under
-  controls, that's the finding. Say so plainly.
+**An HTML dashboard**, single self-contained file.
+
+**A short findings block** to paste into `FINDINGS.md`: a run-log line, plus
+anything that changed the picture — something that held up, dissolved, or newly
+appeared. A few lines. Don't restate the dashboard.

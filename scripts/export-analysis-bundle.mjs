@@ -13,20 +13,20 @@
  *   2. Make sure analysis/CONTEXT.md, analysis/FINDINGS.md and analysis/ANALYZE.md exist.
  *
  * Run:
- *   npm run export:analysis        (from the repo root — it passes --env-file=.env.local)
+ *   node scripts/export-analysis-bundle.mjs
  *
  * Output:
- *   analysis-bundles/ember-YYYY-MM-DD/  + the same folder zipped, ready to upload
+ *   analysis-bundles/ember-YYYY-MM-DD/
  *
  * NOTE: the service_role key bypasses row-level security. Keep it in .env.local,
  * never commit it, and never ship it to the client bundle.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { writeFileSync, mkdirSync, copyFileSync, existsSync, rmSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -130,13 +130,9 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
     if (bedShift !== null && wakeMin !== null) {
       sleepDur = (wakeMin + 24 * 60 - bedShift) / 60;
       if (sleepDur < 0) sleepDur += 24;
-      // >13h is a mislog, not a night of sleep (see CONTEXT.md). The bad value is
-      // almost always the bedtime, so drop that too rather than leaving a bedtime
-      // of 35.5 sitting in the data looking legitimate.
-      if (sleepDur > 13) {
-        sleepDur = null;
-        bedShift = null;
-      }
+      // Implausible values are deliberately NOT nulled here. A 20-hour night means a
+      // mislogged bedtime; it should surface in the analysis with its date so it can
+      // be fixed in Supabase, rather than being papered over on every export.
     }
 
     // Sub-1200 kcal days are failed logging, not fasting.
@@ -221,22 +217,6 @@ const coverage = (rows) => {
     .sort((a, b) => a.pct - b.pct);
 };
 
-// --- packaging --------------------------------------------------------------
-
-/** Zip the bundle so it's one drag into a chat. The folder is left in place. */
-const zipBundle = (dir) => {
-  const zipPath = `${dir}.zip`;
-  // zip *adds to* an existing archive, so a same-day re-run would keep stale files.
-  rmSync(zipPath, { force: true });
-  try {
-    execFileSync('zip', ['-rq', basename(zipPath), basename(dir)], { cwd: dirname(dir) });
-    return zipPath;
-  } catch (e) {
-    console.warn(`\n  ! couldn't zip the bundle (${e.message}) — upload the folder instead`);
-    return null;
-  }
-};
-
 // --- main -------------------------------------------------------------------
 
 const main = async () => {
@@ -311,14 +291,19 @@ const main = async () => {
 
   writeFileSync(join(outDir, 'MANIFEST.md'), manifest);
 
-  const zipPath = zipBundle(outDir);
+  // Zip it so the whole bundle is a single upload. Falls back silently to the
+  // plain folder if `zip` isn't on the system.
+  const zipPath = `${outDir}.zip`;
+  try {
+    execSync(`cd "${dirname(outDir)}" && zip -qr "${zipPath}" "ember-${stamp}"`);
+    console.log(`\nDone. Upload this single file:\n  ${zipPath}`);
+  } catch {
+    console.log(`\nDone (zip unavailable). Upload the contents of:\n  ${outDir}`);
+  }
 
-  console.log(
-    zipPath
-      ? `\nDone. Upload:\n  ${zipPath}\n`
-      : `\nDone. Upload the contents of:\n  ${outDir}\n`
-  );
-  console.log('Then paste the prompt from the top of ANALYZE.md into the chat.');
+  console.log('\nThen paste the prompt from the top of ANALYZE.md into the chat.');
+  console.log('Make sure Code Execution is enabled in Claude settings, or the zip');
+  console.log('cannot be extracted.');
 };
 
 main().catch((e) => {

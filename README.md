@@ -171,6 +171,8 @@ src/pages/                Dashboard, Morning, Evening, Patterns, History,
                           ScreenTime, Settings, Finance
 src/styles/               theme.css (palette tokens), global.css
 supabase/                 idempotent SQL migrations
+scripts/                  export-analysis-bundle.mjs — DB → Claude-chat bundle
+analysis/                 CONTEXT / FINDINGS / ANALYZE docs shipped in each bundle
 ```
 
 ## Navigation
@@ -260,6 +262,49 @@ Notes:
 - Weather (`weather_temp_f`, `weather_code`) is populated automatically by the
   cron Worker once per local day, using the lat/lon from `push_settings`.
   No external input needed.
+
+## Analysis exports
+
+`/patterns` is a quick 30-day read. For real analysis, export the whole dataset
+and work through it in a Claude chat:
+
+```bash
+npm run export:analysis          # from the project root
+```
+
+That writes a dated bundle to `analysis-bundles/ember-YYYY-MM-DD/` (gitignored):
+
+```
+daily_merged.csv   one cleaned row per day + derived fields — the primary table
+raw/*.csv          straight dumps: entries, screen_time, context_periods, …
+MANIFEST.md        generated per run: date range, row counts, per-column coverage
+CONTEXT.md         data dictionary, known quality problems, cleaning rules
+FINDINGS.md        what's already been tested, and whether it held up
+ANALYZE.md         the protocol, and the prompt to paste into the chat
+```
+
+Upload the folder's contents to a new chat and paste the prompt at the top of
+[analysis/ANALYZE.md](analysis/ANALYZE.md). At the end of the run, paste the
+updated findings block back into [analysis/FINDINGS.md](analysis/FINDINGS.md) —
+that file is what makes this a running experiment rather than a series of
+disconnected fishing expeditions, so it's worth the extra step.
+
+Setup — put these in `.env.local` at the repo root (gitignored):
+
+```
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_KEY=sb_secret_...    # secret key: bypasses RLS. Never ship it to the client.
+```
+
+The derived columns and cleaning rules in `daily_merged.csv` (sleep duration from
+bedtime/wake, the >13h mislog cut, sub-1200 kcal days nulled, `day_index` for
+detrending, next-day outcomes) are computed in
+[scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs) and
+documented in [analysis/CONTEXT.md](analysis/CONTEXT.md) — change one and you have
+to change the other, or two runs stop being comparable.
+
+The `finance_*` and `push_*` tables are deliberately excluded from the export.
+Tables that don't exist are skipped with a warning, not an error.
 
 ## Notes
 

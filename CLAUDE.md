@@ -20,6 +20,10 @@ Cloudflare Worker in [worker/](worker/) (cron: push notifications, weather
 snapshot, daily Plaid sync). Auth is delegated to Cloudflare Access — there is
 no in-app login, and no user id anywhere in the schema.
 
+Alongside the app, an **offline analysis workflow**: `npm run export:analysis`
+dumps the whole database into a dated bundle that gets uploaded to a Claude chat.
+It's not part of the deployed app — see the Architecture note below.
+
 ## Repo layout
 
 ```
@@ -35,6 +39,8 @@ functions/api/        Cloudflare Pages Functions (Workers types)
 shared/finance/       runtime-agnostic finance logic — compiled into all three
 worker/               separate cron Worker (Workers types)
 supabase/             idempotent SQL migrations
+analysis/             hand-maintained docs that ship inside every export bundle
+scripts/              plain Node ESM tooling — outside all four tsconfigs
 docs/FINANCE.md       finance setup + operations
 ```
 
@@ -119,6 +125,35 @@ docs/FINANCE.md       finance setup + operations
   `finance_plaid_items` holds access tokens and has **no anon RLS policy** — it
   is server-only; never read it from the SPA. Everything else finance lives in
   [docs/FINANCE.md](docs/FINANCE.md).
+
+- **Two analyses, deliberately different.** `/patterns` is the shallow one: 30
+  days from [src/lib/promptData.ts](src/lib/promptData.ts), streamed through
+  `/api/claude`, no memory between runs. The **analysis bundle** is the deep one —
+  `npm run export:analysis` (from the project root) runs
+  [scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs) on
+  Node, pulls every table with the Supabase **secret** key, writes raw dumps plus
+  a cleaned merged daily table to `analysis-bundles/ember-YYYY-MM-DD/`
+  (gitignored), and copies [analysis/CONTEXT.md](analysis/CONTEXT.md),
+  [analysis/FINDINGS.md](analysis/FINDINGS.md) and
+  [analysis/ANALYZE.md](analysis/ANALYZE.md) in beside a freshly generated
+  `MANIFEST.md`. The bundle is uploaded to a Claude chat by hand; it never goes
+  through `/api/claude`, and nothing about it ships in the app.
+
+  Three things to keep true:
+  - **`buildDaily`'s cleaning rules and CONTEXT.md's "Derived fields" /
+    "Cleaning rules" sections are one spec written twice.** Change one, change
+    the other — otherwise successive runs quietly stop being comparable, which is
+    the failure mode this whole workflow exists to prevent.
+  - **`FINDINGS.md` is state, not a report.** Each run appends to the
+    confirmatory register; exploratory hits get *promoted* into that register to
+    be retested on future data, never written up as discoveries. Don't rewrite
+    past run lines — their value is that the hypothesis was fixed before the data
+    existed.
+  - **`finance_*` and `push_*` are excluded from `TABLES` on purpose.** The list
+    also names tables with no migration in [supabase/](supabase/)
+    (`daily_nutrition`, `body_weight`, `lift_progression`); `fetchAll` skips a
+    table that isn't there with a warning instead of failing, so a partial
+    database still exports.
 
 ## Data conventions
 
@@ -257,7 +292,12 @@ Every recipe ends the same way: run `npm run build` from the repo root.
    [src/lib/promptData.ts](src/lib/promptData.ts) — one edit covers the Patterns
    analysis and the morning nudge, which is exactly why they share the module.
    Use a short key; the legend must state units and the null semantics.
-6. Optionally surface it on History / Dashboard.
+6. Add it to `buildDaily` in
+   [scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs) and
+   document it in [analysis/CONTEXT.md](analysis/CONTEXT.md) — including its
+   start date in the "Schema changes" table, since coverage on a new field is low
+   by design and an undocumented one reads as a logging failure.
+7. Optionally surface it on History / Dashboard.
 
 ### Add a question step to a check-in flow
 
@@ -326,6 +366,25 @@ user has `reviewed`** (the preserve branch in `upsertTransactions`), and account
 User-authored rules live in `finance_rules` and are created from the transaction
 editor, not in code.
 
+### Change what the analysis bundle exports or how it's analyzed
+
+- New table in the dump: add it to `TABLES` in
+  [scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs), and
+  merge it into `buildDaily` if it's daily-keyed.
+- New derived column or changed cleaning rule: edit `buildDaily` **and** the
+  matching bullet in [analysis/CONTEXT.md](analysis/CONTEXT.md) in the same
+  commit.
+- New known data-quality problem: CONTEXT.md, "Known data-quality problems".
+  These are the guardrails that stop a run from reporting an artifact as a
+  finding — worth writing down the moment you notice one.
+- Protocol, output format, or the prompt to paste into the chat:
+  [analysis/ANALYZE.md](analysis/ANALYZE.md).
+- Results of a run: paste the model's findings block into
+  [analysis/FINDINGS.md](analysis/FINDINGS.md) (append, don't rewrite).
+
+`npm run build` doesn't cover any of this — `scripts/` is outside every tsconfig.
+Verify with an actual `npm run export:analysis` run.
+
 ### Add an env var or secret
 
 Decide the runtime first. `VITE_*` → `.env` **and** Cloudflare Pages env vars
@@ -346,11 +405,15 @@ npm run pages:dev        # wrangler pages dev dist — needed for /api/claude an
 cd worker && npm run dev     # wrangler dev — local cron Worker
 cd worker && npm run tick    # wrangler dev --test-scheduled — fires the scheduled handler now
 cd worker && npm run deploy  # wrangler deploy
+
+npm run export:analysis  # root only — dumps the DB to analysis-bundles/ember-<date>/
 ```
 
 Local env: `.env` for `VITE_*` (see `.env.example`), `.dev.vars` for server-side
-Function vars (`ANTHROPIC_API_KEY`, `PLAID_*`, `SUPABASE_SERVICE_KEY`). Both are
-gitignored.
+Function vars (`ANTHROPIC_API_KEY`, `PLAID_*`, `SUPABASE_SERVICE_KEY`), and
+`.env.local` for the export script (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY` — the
+`sb_secret_` key, since the export bypasses RLS). All three are gitignored, as is
+the `analysis-bundles/` output.
 
 **After any change, run `npm run build` from the repo root.** `tsc -b`
 typechecks all four sub-projects via the references in
@@ -410,5 +473,15 @@ references `worker/`, so run the root build for those as well.
 - **Apple Card's account id is `csv-apple-card` and its `source` is `'csv'`**
   even though CSV import no longer exists (screenshots replaced it). Those are
   frozen strings keeping existing rows joined — don't rename them.
+- **Run the export through `npm run export:analysis`, not `node
+  scripts/export-analysis-bundle.mjs`.** The `--env-file=.env.local` flag lives in
+  the npm script, so invoking the file directly exits on "Missing SUPABASE_URL"
+  even with a perfectly good `.env.local` sitting there.
+- **`scripts/` and `analysis/` are outside the four-project solution.** The export
+  script is `.mjs` on purpose — `tsc -b` never sees it, so a broken one still
+  passes `npm run build`. Its `SUPABASE_SERVICE_KEY` is the same secret key the
+  Plaid Functions use, just read from `.env.local` instead of `.dev.vars`; it
+  bypasses RLS, so keep it out of anything `VITE_*` and out of the bundle
+  directory you upload.
 - Recharts dominates the bundle (~290kB gzipped total). Don't add another
   charting library; reuse or extend the existing chart components.

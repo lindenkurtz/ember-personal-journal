@@ -6,15 +6,15 @@ import { screenTimeWeekStart, addDaysKey } from '../lib/date'
 import DurationWheelPicker from '../components/DurationWheelPicker'
 import './ScreenTime.css'
 
-type CellKey = 'phone' | 'pickups' | 'computer'
+type CellKey = 'phone' | 'pickups' | 'ipad'
 type Grid = Record<string, Record<CellKey, string>>
 
-const DURATION_KEYS: CellKey[] = ['phone', 'computer']
+const DURATION_KEYS: CellKey[] = ['phone', 'ipad']
 
 const COLS: { key: CellKey; label: string }[] = [
   { key: 'phone', label: 'Phone' },
   { key: 'pickups', label: 'Pickups' },
-  { key: 'computer', label: 'Computer' }
+  { key: 'ipad', label: 'iPad' }
 ]
 
 /**
@@ -57,7 +57,7 @@ export default function ScreenTime() {
     let cancelled = false
     setLoading(true)
     const empty: Grid = Object.fromEntries(
-      days.map((d) => [d, { phone: '', pickups: '', computer: '' }])
+      days.map((d) => [d, { phone: '', pickups: '', ipad: '' }])
     )
     getScreenTimeRange(weekStart, addDaysKey(weekStart, 6))
       .then((rows) => {
@@ -67,7 +67,7 @@ export default function ScreenTime() {
           g[r.date] = {
             phone: r.phone_minutes != null ? formatDuration(r.phone_minutes) : '',
             pickups: r.phone_pickups != null ? String(r.phone_pickups) : '',
-            computer: r.computer_minutes != null ? formatDuration(r.computer_minutes) : ''
+            ipad: r.ipad_minutes != null ? formatDuration(r.ipad_minutes) : ''
           }
         }
         setGrid(g)
@@ -82,7 +82,7 @@ export default function ScreenTime() {
     setGrid((g) => ({ ...g, [d]: { ...g[d], [key]: v } }))
   }
 
-  const [picker, setPicker] = useState<{ day: string; key: 'phone' | 'computer' } | null>(null)
+  const [picker, setPicker] = useState<{ day: string; key: 'phone' | 'ipad' } | null>(null)
 
   function confirmPicker(minutes: number) {
     if (!picker) return
@@ -99,12 +99,12 @@ export default function ScreenTime() {
         const c = grid[d]
         // All-blank days are skipped entirely — no data must stay "no row",
         // not a row of nulls.
-        if (!c || (c.phone.trim() === '' && c.pickups.trim() === '' && c.computer.trim() === '')) continue
+        if (!c || (c.phone.trim() === '' && c.pickups.trim() === '' && c.ipad.trim() === '')) continue
         patches.push({
           date: d,
           phone_minutes: parseDuration(c.phone),
           phone_pickups: c.pickups.trim() === '' ? null : parseInt(c.pickups, 10),
-          computer_minutes: parseDuration(c.computer)
+          ipad_minutes: parseDuration(c.ipad)
         })
       }
       await upsertScreenTimeDays(patches)
@@ -148,9 +148,9 @@ export default function ScreenTime() {
 
       <p className="st__hint">
         From iOS Settings → Screen Time. Phone is <strong>total screen
-        time</strong>; Computer is Mac + iPad combined. Tap a duration to
-        scroll in hours and minutes. Leave unknown days blank — partial
-        weeks are fine.
+        time</strong>; iPad is the iPad's own total (Mac time is tracked
+        elsewhere). Tap a duration to scroll in hours and minutes. Leave
+        unknown days blank — partial weeks are fine.
       </p>
 
       <div className="st__grid">
@@ -170,7 +170,7 @@ export default function ScreenTime() {
                   type="button"
                   className="st__cell st__cell--duration"
                   aria-label={`${format(parseISO(d), 'EEEE, MMM d')} — ${c.label}`}
-                  onClick={() => setPicker({ day: d, key: c.key as 'phone' | 'computer' })}
+                  onClick={() => setPicker({ day: d, key: c.key as 'phone' | 'ipad' })}
                   disabled={loading}
                 >
                   {grid[d]?.[c.key] || <span className="st__cellPlaceholder">—</span>}

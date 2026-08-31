@@ -67,7 +67,7 @@ create table if not exists public.screen_time (
   date             date primary key,
   phone_minutes    integer check (phone_minutes between 0 and 1440),    -- iPhone, Social + Entertainment categories only
   phone_pickups    integer check (phone_pickups >= 0),                  -- iPhone
-  computer_minutes integer check (computer_minutes between 0 and 1440), -- Mac + iPad combined
+  computer_minutes integer check (computer_minutes between 0 and 1440), -- Mac + iPad combined; RETIRED Aug 2026, see screen_time_ipad_migration.sql
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );

@@ -3,18 +3,22 @@ import { addDaysKey, sundayWeekStartKey } from './date'
 
 /**
  * One day of self-reported screen time, entered in weekly batches on
- * /screentime from iOS Settings > Screen Time. Phone and computer are tracked
+ * /screentime from iOS Settings > Screen Time. Phone and iPad are tracked
  * separately on purpose: Instagram is blocked on the phone and the scrolling
- * moved to the Mac — a merged total would show a fake downward trend.
+ * moved to the iPad — a merged total would show a fake downward trend.
+ *
+ * The retired `computer_minutes` column (Mac + iPad combined, through Aug 2026)
+ * still holds its rows but is deliberately not selected — Mac time moved to a
+ * separate system and the two numbers aren't comparable.
  */
 export interface ScreenTimeRow {
   date: string // YYYY-MM-DD, primary key
   phone_minutes: number | null // iPhone, total screen time
   phone_pickups: number | null // iPhone
-  computer_minutes: number | null // Mac + iPad combined
+  ipad_minutes: number | null // iPad only
 }
 
-const COLUMNS = 'date, phone_minutes, phone_pickups, computer_minutes'
+const COLUMNS = 'date, phone_minutes, phone_pickups, ipad_minutes'
 
 /** Rows between `start` and `end` inclusive (oldest first). Missing days are omitted. */
 export async function getScreenTimeRange(start: string, end: string): Promise<ScreenTimeRow[]> {

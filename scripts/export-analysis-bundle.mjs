@@ -173,7 +173,7 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
 
       phone_minutes: s.phone_minutes ?? null,
       phone_pickups: s.phone_pickups ?? null,
-      computer_minutes: s.computer_minutes ?? null,
+      ipad_minutes: s.ipad_minutes ?? null,
 
       hrv_avg: e.hrv_avg ?? null,
       resting_hr: e.resting_hr ?? null,

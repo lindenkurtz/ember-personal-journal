@@ -170,7 +170,7 @@ function DayDetail({
           value={[
             st.phone_minutes != null ? `phone ${st.phone_minutes}m` : null,
             st.phone_pickups != null ? `${st.phone_pickups} pickups` : null,
-            st.computer_minutes != null ? `computer ${st.computer_minutes}m` : null
+            st.ipad_minutes != null ? `iPad ${st.ipad_minutes}m` : null
           ].filter(Boolean).join(' · ')}
         />
       )}

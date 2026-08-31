@@ -296,8 +296,8 @@ function payloadFor(slot: Slot, makeup = false): { title: string; body: string; 
     return {
       title: 'Screen time',
       body: makeup
-        ? "Last week's phone and computer time still needs logging."
-        : "Log last week's phone and computer time.",
+        ? "Last week's phone and iPad time still needs logging."
+        : "Log last week's phone and iPad time.",
       tag: 'weekly',
       url: '/'
     }

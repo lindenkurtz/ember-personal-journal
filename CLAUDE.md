@@ -221,8 +221,12 @@ docs/FINANCE.md       finance setup + operations
   done. All-blank days are never written; sparse weeks must stay sparse. "Week
   logged" everywhere (Dashboard nag card, Worker smart-skip) means **≥1 row
   exists for that Sun–Sat week**, so intentionally partial weeks never nag
-  forever. Phone and computer minutes are deliberately separate columns —
-  merging them would fake a downward trend when scrolling moves between devices.
+  forever. Phone and iPad minutes are deliberately separate columns — merging
+  them would fake a downward trend when scrolling moves between devices.
+  `computer_minutes` (Mac + iPad combined) was **retired Aug 2026** when Mac time
+  moved to a separate system: the column and its rows stay in the DB, but nothing
+  selects, writes, or exports it, and it was never backfilled into `ipad_minutes`
+  — the two measure different devices. Same rule as the `deep_work_*` columns.
 
 - **`context_periods` overlap is impossible at the DB level** — a gist EXCLUDE
   constraint over `daterange(start_date, end_date, '[]')` with *inclusive*

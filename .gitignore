@@ -2,19 +2,35 @@ node_modules
 dist
 dist-ssr
 .DS_Store
-.env
-.env.local
-.dev.vars
 .wrangler
 *.log
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+.claude/settings.local.json
 
-# --- Personal data — this repo is public. Never commit these. ---
-# Analysis bundles: raw dumps of the whole database.
+# --- Secrets ---
+# Every .env variant except the committed template. .dev.vars holds Pages
+# Function secrets (Anthropic, Plaid, the Supabase secret key).
+.env*
+!.env.example
+.dev.vars*
+
+# --- Personal data — THIS REPO IS PUBLIC. See "This repo is public" in CLAUDE.md.
+# Raw database dumps: health, finance, everything.
 analysis-bundles/
-# The live analysis docs hold real health data and identifying detail. The
-# tracked *.template.md files are the versioned shape; these are the real ones.
-analysis/CONTEXT.md
-analysis/FINDINGS.md
+
+# Deny-by-default inside analysis/: the live docs accumulate real health data and
+# identifying detail, so a new file here is ignored unless explicitly allowed
+# below. ANALYZE.md is method only; the templates are the tracked shape of
+# CONTEXT.md / FINDINGS.md, which are gitignored. If you add a doc that genuinely
+# belongs in the repo, add a negation for it — deliberately, not by reflex.
+analysis/*
+!analysis/ANALYZE.md
+!analysis/*.template.md
+
+# Scratch notes. plan.md previously held a family member's name and finance
+# details; assume anything in this shape is personal.
+plan.md
+notes.md
+scratch/

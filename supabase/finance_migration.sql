@@ -1,5 +1,7 @@
 -- Ember — finance feature schema.
--- Run once in the Supabase SQL editor on the existing project.
+-- Run in the Supabase SQL editor. Idempotent and safe to re-run: every policy is
+-- preceded by `drop policy if exists` because Postgres has no
+-- `create policy if not exists`, so a bare re-run fails with 42710.
 --
 -- RLS model (mirrors CLAUDE.md):
 --   * The SPA authenticates as `anon` (publishable key). Every table the SPA
@@ -44,9 +46,12 @@ create table if not exists finance_accounts (
   last_synced_at timestamptz
 );
 alter table finance_accounts enable row level security;
+drop policy if exists "anon read accounts" on finance_accounts;
 create policy "anon read accounts"   on finance_accounts for select to anon using (true);
 -- INSERT is needed for the client-created synthetic Apple Card (CSV) account.
+drop policy if exists "anon insert accounts" on finance_accounts;
 create policy "anon insert accounts" on finance_accounts for insert to anon with check (true);
+drop policy if exists "anon update accounts" on finance_accounts;
 create policy "anon update accounts" on finance_accounts for update to anon using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
@@ -79,9 +84,13 @@ create index if not exists finance_transactions_date_idx     on finance_transact
 create index if not exists finance_transactions_account_idx  on finance_transactions (account_id);
 create index if not exists finance_transactions_review_idx   on finance_transactions (flagged_for_review, reviewed);
 alter table finance_transactions enable row level security;
+drop policy if exists "anon read txns" on finance_transactions;
 create policy "anon read txns"   on finance_transactions for select to anon using (true);
+drop policy if exists "anon insert txns" on finance_transactions;
 create policy "anon insert txns" on finance_transactions for insert to anon with check (true);
+drop policy if exists "anon update txns" on finance_transactions;
 create policy "anon update txns" on finance_transactions for update to anon using (true) with check (true);
+drop policy if exists "anon delete txns" on finance_transactions;
 create policy "anon delete txns" on finance_transactions for delete to anon using (true);
 -- Idempotent: adds the savings bucket to an already-created table on re-run.
 alter table finance_transactions add column if not exists savings_bucket text;
@@ -101,6 +110,7 @@ create table if not exists finance_balances (
 );
 create index if not exists finance_balances_acct_date_idx on finance_balances (account_id, as_of desc);
 alter table finance_balances enable row level security;
+drop policy if exists "anon read balances" on finance_balances;
 create policy "anon read balances" on finance_balances for select to anon using (true);
 
 -- ---------------------------------------------------------------------------
@@ -114,6 +124,7 @@ create table if not exists finance_net_worth_snapshots (
   synced_at timestamptz not null default now()
 );
 alter table finance_net_worth_snapshots enable row level security;
+drop policy if exists "anon read snapshots" on finance_net_worth_snapshots;
 create policy "anon read snapshots" on finance_net_worth_snapshots for select to anon using (true);
 
 -- ---------------------------------------------------------------------------
@@ -132,9 +143,13 @@ create table if not exists finance_loan_balances (
 );
 create index if not exists finance_loan_balances_date_idx on finance_loan_balances (as_of desc);
 alter table finance_loan_balances enable row level security;
+drop policy if exists "anon read loans" on finance_loan_balances;
 create policy "anon read loans"   on finance_loan_balances for select to anon using (true);
+drop policy if exists "anon insert loans" on finance_loan_balances;
 create policy "anon insert loans" on finance_loan_balances for insert to anon with check (true);
+drop policy if exists "anon update loans" on finance_loan_balances;
 create policy "anon update loans" on finance_loan_balances for update to anon using (true) with check (true);
+drop policy if exists "anon delete loans" on finance_loan_balances;
 create policy "anon delete loans" on finance_loan_balances for delete to anon using (true);
 
 -- ---------------------------------------------------------------------------
@@ -172,8 +187,11 @@ update finance_settings
 -- are left in place (same rule as the retired deep_work_* columns) — nothing
 -- selects them, so they're inert.
 alter table finance_settings enable row level security;
+drop policy if exists "anon read settings" on finance_settings;
 create policy "anon read settings"   on finance_settings for select to anon using (true);
+drop policy if exists "anon insert settings" on finance_settings;
 create policy "anon insert settings" on finance_settings for insert to anon with check (true);
+drop policy if exists "anon update settings" on finance_settings;
 create policy "anon update settings" on finance_settings for update to anon using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
@@ -195,7 +213,11 @@ create index if not exists finance_rules_created_idx on finance_rules (created_a
 -- Idempotent: adds the income source label to an already-created rules table.
 alter table finance_rules add column if not exists income_source text;
 alter table finance_rules enable row level security;
+drop policy if exists "anon read rules" on finance_rules;
 create policy "anon read rules"   on finance_rules for select to anon using (true);
+drop policy if exists "anon insert rules" on finance_rules;
 create policy "anon insert rules" on finance_rules for insert to anon with check (true);
+drop policy if exists "anon update rules" on finance_rules;
 create policy "anon update rules" on finance_rules for update to anon using (true) with check (true);
+drop policy if exists "anon delete rules" on finance_rules;
 create policy "anon delete rules" on finance_rules for delete to anon using (true);

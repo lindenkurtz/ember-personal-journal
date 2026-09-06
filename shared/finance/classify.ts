@@ -11,6 +11,18 @@ export interface ClassifyInput {
 
 export interface ClassifyContext {
   rules: FinanceRule[]
+  // Lowercased substrings identifying the external brokerage/savings institution,
+  // from finance_settings.brokerage_match. Empty = the brokerage branches below
+  // never fire, which is the correct behaviour when none is configured.
+  brokerageMatch: string[]
+}
+
+/** Split a `finance_settings.brokerage_match` value into match tokens. */
+export function parseBrokerageMatch(raw: string | null | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
 }
 
 export interface ClassifyResult {
@@ -25,10 +37,10 @@ export interface ClassifyResult {
 
 /**
  * Detect a savings/retirement contribution by the account the money landed in.
- * Only fires on the destination (inflow) side — the Brokerage account that
- * received the money tells us the bucket. The source-side Bank outflow
- * can't be auto-bucketed (it doesn't name which Brokerage account), so that case
- * is labeled manually in the editor.
+ * Only fires on the destination (inflow) side — the receiving account is what
+ * names the bucket. The source-side checking outflow can't be auto-bucketed (it
+ * doesn't say which destination account), so that case is labeled manually in
+ * the editor. Matching is on generic account-type vocabulary, not institutions.
  */
 export function detectSavingsBucket(account: FinanceAccount | undefined, amount: number): SavingsBucket | null {
   if (!account || amount <= 0) return null
@@ -44,16 +56,20 @@ export function detectSavingsBucket(account: FinanceAccount | undefined, amount:
 }
 
 /**
- * Brokerage transfers clear through Clearing Bank, and the destination Brokerage
- * sub-account is named only by its masked Clearing account number in the memo
- * (e.g. "CLEARING BANK CHK XXXXXX1234"). That number is the single thing telling an
- * Emergency from a Roth from a brokerage transfer, so it's the natural key for
- * an auto-learned savings-bucket rule. Pending transfers carry a truncated memo
- * without it — return null then and let the transfer bucket once it posts.
+ * Brokerage transfers often clear through an intermediary bank, leaving the
+ * destination sub-account identified only by a masked account number in the memo
+ * (e.g. "SOME BANK CHK XXXXXX1234"). That number is frequently the only thing
+ * distinguishing an emergency-fund transfer from a retirement one, so it's the
+ * natural key for an auto-learned savings-bucket rule. Pending transfers carry a
+ * truncated memo without it — return null then and let it bucket once it posts.
  */
-export function brokerageDestToken(name: string | null, merchant: string | null): string | null {
+export function brokerageDestToken(
+  name: string | null,
+  merchant: string | null,
+  brokerageMatch: string[]
+): string | null {
   const hay = `${merchant ?? ''} ${name ?? ''}`.toLowerCase()
-  if (!hay.includes('brokerage') && !hay.includes('brokerage inc')) return null
+  if (!brokerageMatch.some((needle) => hay.includes(needle))) return null
   const m = hay.match(/x{4,}\d{3,}/)
   return m ? m[0] : null
 }
@@ -69,13 +85,13 @@ function textMatches(input: ClassifyInput, needle: string): boolean {
   return hay.includes(needle.toLowerCase())
 }
 
-// A transfer headed into a Brokerage account. We can detect it by description
-// even when the destination Brokerage account isn't connected (investment/Roth
-// transactions often don't sync), but the description alone can't say which
-// bucket — so we surface these for a one-time manual bucketing in the editor.
-function isBrokerageBound(input: ClassifyInput): boolean {
+// A transfer headed into the configured brokerage. Detectable by description
+// even when the destination account isn't connected (investment and retirement
+// accounts often don't sync), but the description alone can't say which bucket —
+// so these are surfaced for a one-time manual bucketing in the editor.
+function isBrokerageBound(input: ClassifyInput, brokerageMatch: string[]): boolean {
   const hay = `${input.merchant_name ?? ''} ${input.name ?? ''}`.toLowerCase()
-  return hay.includes('brokerage') || hay.includes('brokerage inc')
+  return brokerageMatch.some((needle) => hay.includes(needle))
 }
 
 /**
@@ -139,8 +155,8 @@ export function classify(
   // Plaid-tagged transfers between accounts — treat as internal moves. A
   // transfer landing in a savings/retirement account also carries its bucket.
   if (input.pfc_primary === 'TRANSFER_IN' || input.pfc_primary === 'TRANSFER_OUT' || input.pfc_primary === 'LOAN_PAYMENTS') {
-    // Outflow to Brokerage with no auto-detected bucket: surface for manual bucketing.
-    const needsBucket = !savings && input.amount < 0 && isBrokerageBound(input)
+    // Outflow to the brokerage with no auto-detected bucket: surface for manual bucketing.
+    const needsBucket = !savings && input.amount < 0 && isBrokerageBound(input, ctx.brokerageMatch)
     return {
       category: 'transfer',
       is_transfer: true,
@@ -154,7 +170,7 @@ export function classify(
 
   // Brokerage-bound outflow Plaid didn't tag as a transfer — still a savings
   // move; flag it so the bucket gets set once in the editor (see savingsRates).
-  if (input.amount < 0 && isBrokerageBound(input)) {
+  if (input.amount < 0 && isBrokerageBound(input, ctx.brokerageMatch)) {
     return { category: 'transfer', is_transfer: true, flagged_for_review: true, reviewed: false, notes: 'Set savings bucket', savings_bucket: null, income_source: null }
   }
 

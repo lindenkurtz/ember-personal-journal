@@ -9,8 +9,11 @@
  * Setup (once):
  *   1. Put these in .env.local at the repo root (already gitignored):
  *        SUPABASE_URL=https://xxxx.supabase.co
- *        SUPABASE_SERVICE_KEY=eyJ...        <- service_role key, NOT the anon key
+ *        SUPABASE_SERVICE_KEY=sb_secret_...  <- secret key, NOT the publishable key
  *   2. Make sure analysis/CONTEXT.md, analysis/FINDINGS.md and analysis/ANALYZE.md exist.
+ *      CONTEXT.md and FINDINGS.md are gitignored — they hold real health data and
+ *      this repo is public. On a fresh checkout, copy them from the tracked
+ *      analysis/*.template.md files. A missing one is warned about, not fatal.
  *   3. Optional: install focusd so `focusctl` is on PATH, and Mac screen time is
  *      merged in as `mac_minutes`. Without it that column is null and nothing else
  *      changes — see the focusd section below.
@@ -252,7 +255,22 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
 
       gym: e.gym_actual === 'yes' ? 1 : e.gym_actual === 'no' ? 0 : null,
       gym_intention: e.gym_intention === 'yes' ? 1 : e.gym_intention === 'no' ? 0 : null,
-      social: e.social === true ? 1 : e.social === false ? 0 : null,
+      // social_level (0-3) replaces the boolean from 2026-09-06. `social` stays the
+      // backward-compatible binary so the pre- and post-cutover series remain one
+      // column; the level is emitted raw and is null before the cutover, never
+      // reconstructed from the boolean (those days were not rated at this
+      // resolution — same rule as mac_minutes' 0-vs-null).
+      social_level: e.social_level ?? null,
+      social:
+        e.social_level != null
+          ? e.social_level > 0
+            ? 1
+            : 0
+          : e.social === true
+            ? 1
+            : e.social === false
+              ? 0
+              : null,
       focused_work: e.focused_work ?? null,
 
       sick: flag(e.sick),
@@ -282,6 +300,23 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
       note: e.note ?? null,
     };
   });
+
+  // The evening flow writes `social` = (social_level > 0) on every rated day, so a
+  // row carrying a level but a missing or disagreeing boolean means something wrote
+  // one without the other. Worth naming the dates: the derived `social` above
+  // silently prefers the level, which would otherwise hide the drift.
+  const socialMismatches = byDate(entries)
+    .filter(
+      (e) =>
+        e.social_level != null && (e.social == null || e.social !== e.social_level > 0)
+    )
+    .map((e) => `${e.date} (level=${e.social_level}, social=${e.social ?? 'null'})`);
+  if (socialMismatches.length) {
+    console.warn(
+      `  ! social_level disagrees with social on ${socialMismatches.length} row(s) — ` +
+        `daily_merged uses the level: ${socialMismatches.join(', ')}`
+    );
+  }
 
   // Consecutive-night index for trips: night 1, 2, 3... of each away run.
   // Lets the analysis test the adaptation curve instead of guessing at it.

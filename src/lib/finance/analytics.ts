@@ -72,19 +72,19 @@ export function categoryBreakdown(txns: FinanceTransaction[]): CategorySlice[] {
 }
 
 export interface SavingsRates {
-  shortTerm: number // Brokerage Emergency
-  longTerm: number // Brokerage Savings/Investments
-  retirement: number // Brokerage Roth IRA
+  shortTerm: number // emergency fund
+  longTerm: number // savings / brokerage
+  retirement: number // retirement account
   shortTermRate: number | null
   longTermRate: number | null
   retirementRate: number | null
 }
 
 /**
- * Three separate savings figures — deliberately NOT smoothed. Internship summers
- * vs school months swing hard and that swing is the signal. Each contribution is
- * read off the transaction's `savings_bucket` label (auto-set when money lands in
- * a matched Brokerage account, or set manually on the source-side transfer), so a
+ * Three separate savings figures — deliberately NOT smoothed. Earning months and
+ * lean months swing hard, and that swing is the signal. Each contribution is read
+ * off the transaction's `savings_bucket` label (auto-set when money lands in a
+ * matched savings account, or set manually on the source-side transfer), so a
  * given transfer is counted once regardless of which side is connected.
  */
 export function savingsRates(txns: FinanceTransaction[], income: number): SavingsRates {

@@ -20,7 +20,7 @@ export async function getRules(): Promise<FinanceRule[]> {
 
 /**
  * Create or replace the rule for a given match_text. Keyed on match_text so
- * re-learning a Brokerage destination (or re-saving the same "always classify"
+ * re-learning a brokerage destination (or re-saving the same "always classify"
  * rule) overwrites rather than piling up duplicate rules that race on order.
  */
 export async function upsertRuleByMatch(rule: NewRule): Promise<FinanceRule> {

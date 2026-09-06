@@ -82,7 +82,7 @@ export async function extractTransactions(files: File[], account: FinanceAccount
     if (!date || Number.isNaN(amount)) continue
     let category: Category = CATEGORIES.includes(r.category as Category) ? (r.category as Category) : 'shopping'
     const merchant = (r.merchant ?? '').trim() || null
-    // A user rule (e.g. "payments to mom = credit card payment") overrides
+    // A user rule (e.g. "payments to a given payee = credit card payment") overrides
     // Claude's category on import.
     const rule = matchRule(merchant, merchant, rules)
     if (rule) category = rule.category

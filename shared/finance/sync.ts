@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import type { FinanceAccount, FinanceRule, SyncSummary } from './types'
-import { classify } from './classify'
+import type { FinanceAccount, FinanceRule, FinanceSettings, SyncSummary } from './types'
+import { classify, parseBrokerageMatch } from './classify'
 import { computeNetWorth } from './networth'
 import {
   PlaidAccount,
@@ -48,16 +48,19 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
   const plaidEnv = { PLAID_CLIENT_ID: env.PLAID_CLIENT_ID, PLAID_SECRET: env.PLAID_SECRET, PLAID_ENV: env.PLAID_ENV }
   const summary: SyncSummary = { accounts: 0, added: 0, modified: 0, removed: 0, net_worth: null, errors: [] }
 
-  const [{ data: itemRows }, { data: acctRows }, { data: ruleRows }] = await Promise.all([
+  const [{ data: itemRows }, { data: acctRows }, { data: ruleRows }, { data: settingsRow }] = await Promise.all([
     supabase.from('finance_plaid_items').select('item_id, access_token, institution_name, transactions_cursor'),
     supabase.from('finance_accounts').select('*'),
-    supabase.from('finance_rules').select('*')
+    supabase.from('finance_rules').select('*'),
+    supabase.from('finance_settings').select('brokerage_match, loan_servicer').eq('id', 1).maybeSingle()
   ])
 
   const items = (itemRows ?? []) as ItemRow[]
   const accountsById = new Map<string, FinanceAccount>()
   for (const a of (acctRows ?? []) as FinanceAccount[]) accountsById.set(a.account_id, a)
   const rules = (ruleRows ?? []) as FinanceRule[]
+  const settings = settingsRow as Pick<FinanceSettings, 'brokerage_match' | 'loan_servicer'> | null
+  const brokerageMatch = parseBrokerageMatch(settings?.brokerage_match)
 
   const incoming: PlaidTransaction[] = []
   const removedIds: string[] = []
@@ -96,25 +99,33 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
       summary.errors.push(`balances ${item.item_id}: ${String(e)}`)
     }
 
-    // 3. Liabilities — Servicer. Tolerated when an institution doesn't support it.
-    try {
-      const { accounts, liabilities } = await getLiabilities(plaidEnv, item.access_token)
-      const student = liabilities?.student ?? []
-      for (const loan of student) {
-        const acct = accounts.find((a) => a.account_id === loan.account_id)
-        const bal = acct?.balances.current
-        if (bal != null) {
-          await supabase
-            .from('finance_loan_balances')
-            .upsert({ as_of: asOf, servicer: 'Servicer', balance: bal, source: 'plaid' }, { onConflict: 'servicer,as_of' })
+    // 3. Liabilities. Tolerated when an institution doesn't support the endpoint.
+    // `servicer` is the upsert key and the net-worth rollup sums one balance per
+    // distinct servicer, so it has to stay byte-stable across syncs or an old
+    // spelling lingers forever and double-counts. That makes it configuration,
+    // not something derived per-sync from the Plaid payload: skip the write
+    // rather than invent a name when finance_settings.loan_servicer is unset.
+    const servicer = settings?.loan_servicer
+    if (servicer) {
+      try {
+        const { accounts, liabilities } = await getLiabilities(plaidEnv, item.access_token)
+        const student = liabilities?.student ?? []
+        for (const loan of student) {
+          const acct = accounts.find((a) => a.account_id === loan.account_id)
+          const bal = acct?.balances.current
+          if (bal != null) {
+            await supabase
+              .from('finance_loan_balances')
+              .upsert({ as_of: asOf, servicer, balance: bal, source: 'plaid' }, { onConflict: 'servicer,as_of' })
+          }
         }
+      } catch (e) {
+        if (!(e instanceof PlaidError) || e.status >= 500) summary.errors.push(`liabilities ${item.item_id}: ${String(e)}`)
       }
-    } catch (e) {
-      if (!(e instanceof PlaidError) || e.status >= 500) summary.errors.push(`liabilities ${item.item_id}: ${String(e)}`)
     }
   }
 
-  await upsertTransactions(supabase, incoming, accountsById, rules)
+  await upsertTransactions(supabase, incoming, accountsById, rules, brokerageMatch)
 
   if (removedIds.length) {
     await supabase.from('finance_transactions').delete().in('id', removedIds)
@@ -178,7 +189,8 @@ async function upsertTransactions(
   supabase: SupabaseClient,
   incoming: PlaidTransaction[],
   accountsById: Map<string, FinanceAccount>,
-  rules: FinanceRule[]
+  rules: FinanceRule[],
+  brokerageMatch: string[]
 ): Promise<void> {
   if (!incoming.length) return
   const ids = incoming.map((t) => t.transaction_id)
@@ -227,7 +239,7 @@ async function upsertTransactions(
         pfc_detailed: t.personal_finance_category?.detailed
       },
       accountsById.get(t.account_id),
-      { rules }
+      { rules, brokerageMatch }
     )
     return {
       ...base,

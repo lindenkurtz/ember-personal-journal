@@ -10,4 +10,11 @@ dist-ssr
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+
+# --- Personal data — this repo is public. Never commit these. ---
+# Analysis bundles: raw dumps of the whole database.
 analysis-bundles/
+# The live analysis docs hold real health data and identifying detail. The
+# tracked *.template.md files are the versioned shape; these are the real ones.
+analysis/CONTEXT.md
+analysis/FINDINGS.md

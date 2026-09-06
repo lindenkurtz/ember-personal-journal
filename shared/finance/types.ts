@@ -87,8 +87,14 @@ export interface FinanceSettings {
   id: number
   plaid_env: string
   cc_payment_payee: string | null
-  wf_buffer_target: number
-  secondary_buffer_target: number
+  // Comma-separated substrings naming the external brokerage/savings institution
+  // that transfers are headed for — its name, plus whatever abbreviation shows up
+  // in a memo line. Null = none configured, and those classifier branches simply
+  // don't fire. Kept in the DB so no institution name is hardcoded here.
+  brokerage_match: string | null
+  // Display name of the loan servicer behind finance_loan_balances. Null = no
+  // loan tracked. Doubles as the write key, so changing it strands existing rows.
+  loan_servicer: string | null
   last_full_sync_date: string | null
 }
 

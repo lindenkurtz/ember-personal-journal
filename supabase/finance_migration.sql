@@ -117,12 +117,15 @@ alter table finance_net_worth_snapshots enable row level security;
 create policy "anon read snapshots" on finance_net_worth_snapshots for select to anon using (true);
 
 -- ---------------------------------------------------------------------------
--- finance_loan_balances — Servicer. Written by Plaid Liabilities or manually.
+-- finance_loan_balances — one row per servicer per day. Written by Plaid
+-- Liabilities or manually from /finance. `servicer` is the display name AND the
+-- upsert key, and the net-worth rollup sums the latest balance per distinct
+-- servicer — so renaming one strands its old rows and double-counts the loan.
 -- ---------------------------------------------------------------------------
 create table if not exists finance_loan_balances (
   id bigint generated always as identity primary key,
   as_of date not null,
-  servicer text not null default 'Servicer',
+  servicer text not null,
   balance numeric not null,
   source text not null default 'manual',
   unique (servicer, as_of)
@@ -141,12 +144,33 @@ create table if not exists finance_settings (
   id smallint primary key default 1,
   plaid_env text not null default 'sandbox',
   cc_payment_payee text,
-  wf_buffer_target numeric not null default 100,
-  secondary_buffer_target numeric not null default 75,
+  -- Comma-separated substrings naming the external brokerage/savings institution
+  -- transfers are bound for. Null = no brokerage configured; the classifier's
+  -- brokerage branches don't fire. Kept here so no institution is named in code.
+  brokerage_match text,
+  -- Display name of the loan servicer in finance_loan_balances. Null = no loan
+  -- tracked, and the Plaid liabilities write is skipped rather than inventing a
+  -- name that would not match existing rows.
+  loan_servicer text,
   last_full_sync_date date,
   constraint finance_settings_singleton check (id = 1)
 );
 insert into finance_settings (id) values (1) on conflict (id) do nothing;
+
+-- Backfill for databases created before these columns existed. Idempotent.
+alter table finance_settings add column if not exists brokerage_match text;
+alter table finance_settings add column if not exists loan_servicer text;
+
+-- Adopt the servicer name already present in the data, so upgrading doesn't
+-- strand existing loan rows under a name the app no longer knows.
+update finance_settings
+   set loan_servicer = (select servicer from finance_loan_balances order by as_of desc limit 1)
+ where loan_servicer is null;
+
+-- Two per-account buffer-target columns were dropped from this definition: never
+-- read by the app, and named after specific institutions. Any existing columns
+-- are left in place (same rule as the retired deep_work_* columns) — nothing
+-- selects them, so they're inert.
 alter table finance_settings enable row level security;
 create policy "anon read settings"   on finance_settings for select to anon using (true);
 create policy "anon insert settings" on finance_settings for insert to anon with check (true);

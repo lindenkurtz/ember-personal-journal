@@ -5,6 +5,10 @@ export type GymChoice = 'yes' | 'no'
 
 export type FocusedWork = 'none' | 'light' | 'solid' | 'deep'
 
+/** Ordinal replacement for the `social` boolean, which carries too little
+ * resolution to separate days. */
+export type SocialLevel = 0 | 1 | 2 | 3
+
 /** The six confound flags captured in the evening flow. On historical rows all
  * six are null = "untracked"; from TRACKING_V2_START the evening save writes
  * explicit true/false for every flag. Preserve that distinction in any new
@@ -38,6 +42,11 @@ export const TRACKING_V2_START = '2026-07-21'
 /** focused_work is hidden from the evening flow until the school year starts. */
 export const FOCUSED_WORK_START = '2026-08-15'
 
+/** First date the evening flow asks social as a 0–3 level instead of yes/no.
+ * Earlier days keep the boolean question: they were never rated at this
+ * resolution, and a make-up entry must not invent a level for them. */
+export const SOCIAL_LEVEL_START = '2026-09-06'
+
 /** Shape of a single daily entry. One row per date. */
 export interface Entry {
   date: string // YYYY-MM-DD, primary key
@@ -64,7 +73,8 @@ export interface Entry {
   travel_day: boolean | null // 3+ hours in transit today
   caffeine_late: boolean | null // caffeine after ~2pm today
   deadline_pressure: boolean | null // exam or major deadline within 48h
-  social: boolean | null
+  social: boolean | null // legacy binary; still written from SOCIAL_LEVEL_START as (social_level > 0) so the series stays continuous
+  social_level: SocialLevel | null // 0 none / 1 passing / 2 a real hang / 3 most of the day, asked from SOCIAL_LEVEL_START
   note: string | null
   hrv_avg: number | null
   resting_hr: number | null

@@ -12,6 +12,7 @@ import { extractTransactions } from '../lib/finance/extract'
 import { LOCAL_ACCOUNTS, ensureLocal } from '../lib/finance/localAccounts'
 import { cashFlow, categoryBreakdown, incomeBySource, savingsRates } from '../lib/finance/analytics'
 import { CATEGORY_LABELS } from '../../shared/finance/categories'
+import { parseBrokerageMatch } from '../../shared/finance/classify'
 import { monthKey, monthRange, prevMonthKey, nextMonthKey, prettyMonth } from '../lib/date'
 import { money } from '../lib/finance/format'
 import PlaidLinkButton from '../components/finance/PlaidLinkButton'
@@ -208,11 +209,18 @@ export default function Finance() {
   }
 
   async function handleManualLoan() {
-    const raw = window.prompt('Servicer loan balance ($):', loan ? String(loan.balance) : '')
+    // The servicer name is user data, never a constant here. Prefer the name
+    // already on the latest row, then the configured one, and only ask when
+    // neither exists — the name is the upsert key, so a typo starts a second
+    // servicer that the net-worth rollup would add on top of the first.
+    const servicer =
+      loan?.servicer ?? settings?.loan_servicer ?? window.prompt('Loan servicer name:')?.trim()
+    if (!servicer) return
+    const raw = window.prompt(`${servicer} loan balance ($):`, loan ? String(loan.balance) : '')
     if (raw == null) return
     const v = parseFloat(raw.replace(/[$,]/g, ''))
     if (Number.isNaN(v)) return
-    await setManualLoan(v)
+    await setManualLoan(v, servicer)
     await load()
   }
 
@@ -312,7 +320,7 @@ export default function Finance() {
               })}
             </div>
             <div className="finance__loan">
-              <span>Servicer loan: <strong>{loan ? money(loan.balance) : 'not set'}</strong>{loan ? ` (${loan.source})` : ''}</span>
+              <span>{loan?.servicer ?? settings?.loan_servicer ?? 'Loan'}: <strong>{loan ? money(loan.balance) : 'not set'}</strong>{loan ? ` (${loan.source})` : ''}</span>
               <button className="finance__ghostBtn finance__ghostBtn--sm" onClick={handleManualLoan}>Set manually</button>
             </div>
           </section>
@@ -356,6 +364,7 @@ export default function Finance() {
           onClose={() => setEditing(null)}
           onDelete={handleDelete}
           onCreateRule={handleCreateRule}
+          brokerageMatch={parseBrokerageMatch(settings?.brokerage_match)}
         />
       )}
 

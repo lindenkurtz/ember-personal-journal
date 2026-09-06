@@ -9,7 +9,7 @@ import { money } from '../../lib/finance/format'
 const SAVINGS_LABELS: Record<SavingsBucket, string> = {
   short_term: 'Short-term (Emergency)',
   long_term: 'Long-term (Investments)',
-  retirement: 'Retirement (Roth IRA)'
+  retirement: 'Retirement'
 }
 
 interface Props {
@@ -19,10 +19,12 @@ interface Props {
   onClose: () => void
   onDelete?: (id: string) => Promise<void>
   onCreateRule?: (rule: NewRule) => Promise<void>
+  /** From finance_settings.brokerage_match; empty disables destination auto-learn. */
+  brokerageMatch?: string[]
 }
 
 /** Full per-transaction editor — every field the user can override. */
-export default function TransactionEditor({ txn, accountName, onSave, onClose, onDelete, onCreateRule }: Props) {
+export default function TransactionEditor({ txn, accountName, onSave, onClose, onDelete, onCreateRule, brokerageMatch = [] }: Props) {
   const [category, setCategory] = useState<Category>(txn.category)
   const [notes, setNotes] = useState(txn.notes ?? '')
   const [isTransfer, setIsTransfer] = useState(txn.is_transfer)
@@ -58,9 +60,9 @@ export default function TransactionEditor({ txn, accountName, onSave, onClose, o
           income_source: source
         })
       }
-      // Auto-learn the Brokerage savings destination from its Clearing clearing-account
+      // Auto-learn the savings destination from the masked clearing-account
       // number so future transfers to the same bucket classify without review.
-      const token = bucket && category === 'transfer' ? brokerageDestToken(txn.name, txn.merchant_name) : null
+      const token = bucket && category === 'transfer' ? brokerageDestToken(txn.name, txn.merchant_name, brokerageMatch) : null
       if (token && onCreateRule && !(makeRule && ruleMatch.trim().toLowerCase() === token)) {
         await onCreateRule({ match_text: token, category: 'transfer', note: null, savings_bucket: bucket, income_source: null })
       }

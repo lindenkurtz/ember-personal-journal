@@ -24,6 +24,46 @@ Alongside the app, an **offline analysis workflow**: `npm run export:analysis`
 dumps the whole database into a dated bundle that gets uploaded to a Claude chat.
 It's not part of the deployed app — see the Architecture note below.
 
+## This repo is public
+
+**Nothing that identifies the user or describes their life may be committed.**
+The deployment is private; the source is not. This is the one rule in this file
+that can't be fixed after the fact — a push is public within minutes and is
+archived by crawlers, so a later commit removing something does not un-publish
+it. When in doubt, don't commit it; ask.
+
+Never in a commit — no exceptions, including in a comment, a test fixture, an
+example, or a commit message:
+
+- **Health, mood, sleep, training, or nutrition data**, real or realistic —
+  including summary statistics and correlations. The live `analysis/CONTEXT.md`
+  and `analysis/FINDINGS.md` are gitignored for this reason; edit the tracked
+  `*.template.md` files when the *structure* changes, never by pasting real data
+  into them.
+- **Names of the user's financial institutions** — bank, brokerage, loan
+  servicer, card issuer. These are configuration, read from `finance_settings`
+  (`brokerage_match`, `loan_servicer`, `cc_payment_payee`). A payment network
+  the app has an actual code path for (Plaid, Venmo, Apple Card/Cash) is a
+  feature, not a disclosure — those are fine.
+- **Balances, amounts, transactions, account or card numbers.**
+- **Identifying detail**: legal name beyond the existing git authorship, email,
+  address, employer, school, coordinates, timezone as anything but a fallback
+  default, or the shape of a daily routine.
+- **Credentials and endpoints**: any key, token, VAPID private key, the Supabase
+  project URL, the Worker's `*.workers.dev` hostname, or the Pages domain.
+
+Two habits that keep this true:
+
+- **New personal-data surface? Gitignore the real file and track a template.**
+  That is the pattern `analysis/` uses, and the export tolerates a missing doc,
+  so a clone still works.
+- **New user-specific config? It's a DB column, not a constant.** The precedent
+  is `finance_settings` — if a value would differ for another person, it belongs
+  in a row, with a null default that turns the feature off cleanly.
+
+Before any commit, sanity-check `git diff --staged` for the above. `npm run
+build` will not catch any of it.
+
 ## Repo layout
 
 ```
@@ -39,7 +79,8 @@ functions/api/        Cloudflare Pages Functions (Workers types)
 shared/finance/       runtime-agnostic finance logic — compiled into all three
 worker/               separate cron Worker (Workers types)
 supabase/             idempotent SQL migrations
-analysis/             hand-maintained docs that ship inside every export bundle
+analysis/             docs that ship inside every export bundle; the real
+                      CONTEXT/FINDINGS are gitignored, templates are tracked
 scripts/              plain Node ESM tooling — outside all four tsconfigs
 docs/FINANCE.md       finance setup + operations
 ```
@@ -133,10 +174,15 @@ docs/FINANCE.md       finance setup + operations
   [scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs) on
   Node, pulls every table with the Supabase **secret** key, writes raw dumps plus
   a cleaned merged daily table to `analysis-bundles/ember-YYYY-MM-DD/`
-  (gitignored), and copies [analysis/CONTEXT.md](analysis/CONTEXT.md),
-  [analysis/FINDINGS.md](analysis/FINDINGS.md) and
+  (gitignored), and copies `analysis/CONTEXT.md`, `analysis/FINDINGS.md` and
   [analysis/ANALYZE.md](analysis/ANALYZE.md) in beside a freshly generated
-  `MANIFEST.md`. The folder is zipped alongside itself and the zip is uploaded to
+  `MANIFEST.md`. The first two are **gitignored** — they hold real health data —
+  and the tracked
+  [analysis/CONTEXT.template.md](analysis/CONTEXT.template.md) /
+  [analysis/FINDINGS.template.md](analysis/FINDINGS.template.md) carry their
+  structure instead. A missing doc is a warning, not an error, so a fresh clone
+  still exports. Edit a template only to change the *shape*; never paste real
+  data in. The folder is zipped alongside itself and the zip is uploaded to
   a Claude chat by hand; it never goes through `/api/claude`, and nothing about it
   ships in the app.
 
@@ -148,9 +194,9 @@ docs/FINANCE.md       finance setup + operations
   of the export is unaffected.
 
   Four things to keep true:
-  - **`buildDaily`'s cleaning rules and CONTEXT.md's "Derived fields" /
-    "Cleaning rules" sections are one spec written twice.** Change one, change
-    the other — otherwise successive runs quietly stop being comparable, which is
+  - **`buildDaily`'s cleaning rules and the "Derived fields" / "Cleaning rules"
+    sections of CONTEXT.md *and* its template are one spec written three times.**
+    Change one, change the others — otherwise successive runs quietly stop being comparable, which is
     the failure mode this whole workflow exists to prevent.
   - **`FINDINGS.md` is state, not a report.** Each run appends to the
     confirmatory register; exploratory hits get *promoted* into that register to
@@ -380,8 +426,12 @@ an input, tokens from `theme.css` for every color. Finance-only components go in
 
 Edit [worker/src/index.ts](worker/src/index.ts) (`dueMorning`, `dueEvening`,
 `dueWeekly`, `payloadFor`), then `cd worker && npm run tick` to fire the
-scheduled handler immediately, or hit `/?force=morning|evening|weekly|finance` on
-the deployed Worker. If you touch a "done" rule, check the matching
+scheduled handler immediately, or hit
+`/?force=morning|evening|weekly|finance&key=<FORCE_KEY>` on the deployed Worker.
+That endpoint is gated on the `FORCE_KEY` secret and **fails closed** — the
+Worker is on `*.workers.dev`, which Cloudflare Access doesn't cover, so an
+unset or wrong key returns an indistinguishable 404. Don't loosen it, and don't
+echo caught errors into the response body. If you touch a "done" rule, check the matching
 `isMorningDone`/`isEveningDone` in Dashboard. New settings columns need adding to
 both the Worker's `Settings` interface + its select list and the SPA's
 `PushSettings` + `COLUMNS` in [src/lib/settings.ts](src/lib/settings.ts).
@@ -393,7 +443,14 @@ Categories are a closed union in
 `CATEGORY_LABELS` in [shared/finance/categories.ts](shared/finance/categories.ts)
 and the Plaid mapping tables there. Classification logic is
 [shared/finance/classify.ts](shared/finance/classify.ts), data-driven off
-`finance_settings.cc_payment_payee`. A re-sync **never clobbers a transaction the
+`finance_settings` — `cc_payment_payee`, plus `brokerage_match` (comma-separated
+substrings identifying the user's brokerage, threaded in through
+`ClassifyContext.brokerageMatch`) and `loan_servicer`. **No institution name
+belongs in this repo**: a new one is a `finance_settings` column with a null
+default that turns its branch off, never a string literal. `loan_servicer` is
+additionally the upsert key for `finance_loan_balances` and the net-worth rollup
+sums the latest balance per distinct servicer — so it must stay byte-stable, or
+old rows are stranded under the old name and counted on top of the new ones. A re-sync **never clobbers a transaction the
 user has `reviewed`** (the preserve branch in `upsertTransactions`), and account
 `include_in_net_worth` toggles are likewise preserved — keep both invariants.
 User-authored rules live in `finance_rules` and are created from the transaction

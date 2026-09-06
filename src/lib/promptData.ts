@@ -40,6 +40,7 @@ export function buildCompactRows(
       fw: e.focused_work,
       meal: e.last_meal_start_time ? e.last_meal_start_time.slice(0, 5) : null,
       soc: e.social,
+      soc_lv: e.social_level,
       hrv: e.hrv_avg,
       rhr: e.resting_hr,
       steps: e.steps,
@@ -73,7 +74,8 @@ export const FIELD_LEGEND = [
   '    flags: [] means tracked, nothing unusual. flags ABSENT from a row means confounds were not yet tracked that day — never read absence as "none".',
   '    Treat flags as confounders: rare events that distort sleep and day quality. Use them to explain outliers and discount distorted days — they are not goals and never a target.',
   '  st_ph = phone screen minutes (total screen time), st_pu = phone pickups, st_ip = iPad minutes. Entered weekly, so missing on many days. Phone and iPad are deliberately separate — Instagram is blocked on the phone and scrolling moved to the iPad, so a merged total would mislead. A combined Mac + iPad number was tracked instead of st_ip through Aug 2026; it is retired and not included here.',
-  '  soc = had meaningful social time (boolean).',
+  '  soc = had any social time (boolean). Superseded by soc_lv, which has real resolution — prefer soc_lv wherever both exist and treat soc on its own as low-information.',
+  "  soc_lv = social level: 0 = none | 1 = passing (roommates around, someone in class) | 2 = a real hang | 3 = most of the day. Asked from 2026-09-06; null before that, and never backfilled — earlier days were only ever rated as the boolean, so absence is untracked, not 0.",
   '  hrv = avg heart-rate variability (ms), rhr = resting heart rate (bpm), steps = daily steps.',
   '  tempF = outside °F at morning check-in, wcode = Open-Meteo WMO weather code.',
   '  note = freetext note about the day (when present).'

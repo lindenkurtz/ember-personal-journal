@@ -14,12 +14,14 @@ import {
   upsertEntry,
   GymChoice,
   FocusedWork,
+  SocialLevel,
   EntryPatch,
   ConfoundKey,
   CONFOUND_KEYS,
   CONFOUND_LABELS,
   TRACKING_V2_START,
-  FOCUSED_WORK_START
+  FOCUSED_WORK_START,
+  SOCIAL_LEVEL_START
 } from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
 import '../pages/Morning.css' // share the journal layout/buttons
@@ -29,10 +31,25 @@ const GYM_OPTIONS = [
   { value: 'no', label: 'No' }
 ] as const
 
+// Pre-SOCIAL_LEVEL_START days only; a make-up for one of those is still yes/no.
 const SOCIAL_OPTIONS = [
   { value: 'yes', label: 'Yes' },
   { value: 'no', label: 'No' }
 ] as const
+
+const SOCIAL_LEVEL_OPTIONS = [
+  { value: '0', label: 'None' },
+  { value: '1', label: 'Passing' },
+  { value: '2', label: 'A real hang' },
+  { value: '3', label: 'Most of the day' }
+] as const
+type SocialLevelKey = (typeof SOCIAL_LEVEL_OPTIONS)[number]['value']
+
+// Persistent (not a tooltip), same as FOCUSED_DEFINITION: the boundaries have to
+// mean the same thing in month six as they did in month one.
+const SOCIAL_LEVEL_DEFINITION =
+  'None · Passing = roommates around, someone in class ' +
+  '· A real hang = deliberate time with someone · Most of the day.'
 
 const FOCUSED_OPTIONS = [
   { value: 'none', label: 'None' },
@@ -69,6 +86,7 @@ interface DraftEvening {
   last_meal_start_time: string | null
   confounds: Record<ConfoundKey, boolean>
   social: boolean | null
+  social_level: SocialLevel | null
   day_quality: number | null
   note: string
 }
@@ -110,6 +128,7 @@ export default function Evening() {
     last_meal_start_time: null,
     confounds: { ...NO_CONFOUNDS },
     social: null,
+    social_level: null,
     day_quality: null,
     note: ''
   })
@@ -131,6 +150,9 @@ export default function Evening() {
             CONFOUND_KEYS.map((k) => [k, e[k] ?? false])
           ) as Record<ConfoundKey, boolean>,
           social: e.social ?? d.social,
+          // Never derived from the boolean: old rows were never rated at this
+          // resolution and a seeded level would be an invented observation.
+          social_level: e.social_level ?? d.social_level,
           day_quality: e.day_quality ?? d.day_quality,
           note: e.note ?? d.note
         }))
@@ -140,7 +162,7 @@ export default function Evening() {
   }, [targetDate])
 
   const idx = questions.indexOf(step)
-  const canAdvance = isValid(step, draft)
+  const canAdvance = isValid(step, draft, targetDate)
   const isLast = idx === questions.length - 1
 
   function next() {
@@ -162,9 +184,17 @@ export default function Evening() {
       const patch: EntryPatch = {
         date: targetDate,
         gym_actual: draft.gym_actual,
-        social: draft.social,
         day_quality: draft.day_quality,
         note: draft.note.trim() || null
+      }
+      if (targetDate >= SOCIAL_LEVEL_START) {
+        patch.social_level = draft.social_level
+        // Keep the legacy binary continuous across the cutover so everything
+        // reading `social` — History, the prompts, the export's backward-compatible
+        // column — keeps working mid-transition without a special case.
+        patch.social = draft.social_level === null ? null : draft.social_level > 0
+      } else {
+        patch.social = draft.social
       }
       if (targetDate >= TRACKING_V2_START) {
         patch.last_meal_start_time = draft.last_meal_start_time
@@ -198,7 +228,7 @@ export default function Evening() {
 
       <div className="morning__stage">
         <AnimatePresence mode="wait">
-          <StepView step={step} draft={draft} setDraft={setDraft} />
+          <StepView step={step} draft={draft} setDraft={setDraft} targetDate={targetDate} />
         </AnimatePresence>
       </div>
 
@@ -229,11 +259,13 @@ export default function Evening() {
 function StepView({
   step,
   draft,
-  setDraft
+  setDraft,
+  targetDate
 }: {
   step: Step
   draft: DraftEvening
   setDraft: (d: DraftEvening) => void
+  targetDate: string
 }) {
   if (step === 'gym') {
     return (
@@ -304,13 +336,35 @@ function StepView({
     )
   }
   if (step === 'social') {
+    // A make-up for a day before the cutover keeps the boolean question — that
+    // day was never rated at this resolution and can't be given a level now.
+    if (targetDate < SOCIAL_LEVEL_START) {
+      return (
+        <QuestionCard stepKey="social" question="Any social time today?">
+          <PillGroup
+            ariaLabel="Social"
+            options={SOCIAL_OPTIONS}
+            value={draft.social === null ? null : draft.social ? 'yes' : 'no'}
+            onChange={(v) => setDraft({ ...draft, social: v === 'yes' })}
+          />
+        </QuestionCard>
+      )
+    }
     return (
-      <QuestionCard stepKey="social" question="Any social time today?">
+      <QuestionCard
+        stepKey="social"
+        question="How much social time today?"
+        hint={SOCIAL_LEVEL_DEFINITION}
+      >
         <PillGroup
-          ariaLabel="Social"
-          options={SOCIAL_OPTIONS}
-          value={draft.social === null ? null : draft.social ? 'yes' : 'no'}
-          onChange={(v) => setDraft({ ...draft, social: v === 'yes' })}
+          ariaLabel="Social level"
+          options={SOCIAL_LEVEL_OPTIONS}
+          value={
+            draft.social_level === null
+              ? null
+              : (String(draft.social_level) as SocialLevelKey)
+          }
+          onChange={(v) => setDraft({ ...draft, social_level: Number(v) as SocialLevel })}
         />
       </QuestionCard>
     )
@@ -341,7 +395,7 @@ function StepView({
   )
 }
 
-function isValid(step: Step, d: DraftEvening): boolean {
+function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
   switch (step) {
     case 'gym':
       return d.gym_actual !== null
@@ -352,7 +406,7 @@ function isValid(step: Step, d: DraftEvening): boolean {
     case 'confounds':
       return true // no selection = a normal day; a single tap moves past
     case 'social':
-      return d.social !== null
+      return targetDate >= SOCIAL_LEVEL_START ? d.social_level !== null : d.social !== null
     case 'day_quality':
       return d.day_quality !== null
     case 'note':

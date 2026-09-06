@@ -12,6 +12,8 @@ export interface Env {
   PLAID_CLIENT_ID?: string
   PLAID_SECRET?: string
   PLAID_ENV?: string
+  // Shared secret for the manual /?force= trigger. Unset = endpoint disabled.
+  FORCE_KEY?: string
 }
 
 type Slot = 'morning' | 'evening' | 'weekly' | 'finance'
@@ -45,9 +47,17 @@ export default {
     ctx.waitUntil(tick(env))
     ctx.waitUntil(financeTick(env).catch((err) => console.error('[finance] error', err)))
   },
-  // Manual trigger for testing: `curl https://<worker>/?force=morning|evening|weekly|finance`
+  // Manual trigger for ops/testing. This Worker answers on a *.workers.dev
+  // origin, which Cloudflare Access does not cover — so the endpoint is gated on
+  // a shared secret and fails closed when FORCE_KEY isn't set. Anything that
+  // doesn't authenticate gets an identical 404, so the Worker never advertises
+  // that the endpoint exists:
+  //   curl 'https://<worker>/?force=morning&key=<FORCE_KEY>'
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
+    if (!env.FORCE_KEY || !secretEquals(url.searchParams.get('key'), env.FORCE_KEY)) {
+      return new Response('Not found', { status: 404 })
+    }
     const force = url.searchParams.get('force') as Slot | null
     try {
       if (force === 'finance') {
@@ -57,10 +67,21 @@ export default {
       await tick(env, force)
       return new Response('ok', { status: 200 })
     } catch (err) {
+      // Logged to `wrangler tail`, never echoed: upstream errors carry request
+      // details and sometimes fragments of credentials.
       console.error('[notifier] error', err)
-      return new Response(String(err), { status: 500 })
+      return new Response('Internal error', { status: 500 })
     }
   }
+}
+
+// Constant-time over the key body, so a wrong key can't be recovered byte by
+// byte from response timing.
+function secretEquals(given: string | null, expected: string): boolean {
+  if (!given || given.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < given.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i)
+  return diff === 0
 }
 
 // Daily full Plaid sync. Runs at most once per local day (deduped via

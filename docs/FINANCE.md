@@ -21,8 +21,8 @@ Verify afterward:
 4. When ready for real data, submit a **Production access request** in the
    dashboard and swap `PLAID_ENV` to `production` with the Production secret.
 5. Add the OAuth **redirect URI** `https://<your-pages-domain>/finance` under
-   Team Settings → API → Allowed redirect URIs (needed for banks like Wells
-   Fargo that use OAuth).
+   Team Settings → API → Allowed redirect URIs (needed for banks that use an
+   OAuth handoff).
 
 ### 3. Environment variables
 
@@ -58,11 +58,11 @@ npx wrangler secret put PLAID_ENV
   cron Worker ([worker/src/index.ts](../worker/src/index.ts) → `financeTick`,
   deduped once per local day).
 - **Classification** ([shared/finance/classify.ts](../shared/finance/classify.ts)):
-  Venmo/peer → review queue; Apple Cash→a family payee → Credit Card Payment (transfer);
+  Venmo/peer → review queue; a configured payee → Credit Card Payment (transfer);
   Apple Cash cash-back → income; Plaid transfers → internal transfers; otherwise
   the Plaid category map. User edits on a `reviewed` row are never clobbered by
   a re-sync.
-- **Net worth** = included asset balances − Servicer, snapshotted each sync.
+- **Net worth** = included asset balances − loan balances, snapshotted each sync.
 - **Apple Card / Apple Cash are screenshot-only.** Plaid can't reach them and,
   as a Family participant, the user can't CSV-export either. Both are synthetic
   accounts defined in [src/lib/finance/localAccounts.ts](../src/lib/finance/localAccounts.ts)
@@ -79,11 +79,29 @@ npx wrangler secret put PLAID_ENV
   `'csv'`: those are frozen strings that keep existing rows joined, not a live
   CSV path. Don't "fix" them.
 - **Savings rates** are read off each transaction's `savings_bucket`
-  (`short_term` = Brokerage Emergency, `long_term` = Investments/Savings,
-  `retirement` = Roth IRA). It auto-sets when money lands in a matched Brokerage
-  account; if those accounts aren't connected, label the Bank-outflow
-  transfer manually in the transaction editor. One label per transfer, so it's
+  (`short_term` = emergency fund, `long_term` = savings/brokerage,
+  `retirement` = retirement account). It auto-sets when money lands in a matched
+  savings account; if those accounts aren't connected, label the source-side
+  outflow manually in the transaction editor. One label per transfer, so it's
   never double-counted.
+
+## Naming your own institutions
+
+**No bank, brokerage, or loan servicer is named anywhere in this repo** — the
+repo is public. The two places the app needs one, it reads from
+`finance_settings` (singleton row, id = 1):
+
+| Column | What to put there |
+| --- | --- |
+| `brokerage_match` | Comma-separated substrings identifying transfers bound for your brokerage — its name plus whatever abbreviation appears in a memo line (e.g. `acme invest,acme inv`). Null leaves those classifier branches off. |
+| `loan_servicer` | Display name for your loan, e.g. on `/finance` and as the write key for `finance_loan_balances`. Null skips the Plaid liabilities write entirely. |
+| `cc_payment_payee` | Payee whose payments should classify as a credit-card payment. |
+
+`loan_servicer` is also the **upsert key** for loan rows and the net-worth
+rollup sums the latest balance per distinct servicer — so change it and the old
+rows are stranded under the old name and counted on top of the new ones. The
+migration seeds it from your existing loan data for exactly this reason; set it
+once and leave it.
 
 ## Testing (Sandbox)
 

@@ -9,7 +9,7 @@ interface Props {
 /**
  * Opens Plaid Link. We fetch a fresh link_token on click, then auto-open once
  * the SDK is ready. redirect_uri is the deployed /finance URL so OAuth banks
- * (e.g. Bank) can hand the session back.
+ * (banks that use an OAuth handoff) can hand the session back.
  */
 export default function PlaidLinkButton({ onLinked }: Props) {
   const [token, setToken] = useState<string | null>(null)

@@ -5,6 +5,13 @@ time, meal timing, confounding events, and screen time — plus a personal finan
 dashboard at `/finance`. Single-user PWA. Lives behind Cloudflare Access. Built
 with React + Vite, Supabase, and the Claude API.
 
+Built for one person (me), but the code is public and MIT-licensed. It has no
+login of its own and no user id anywhere in the schema — it assumes exactly one
+user behind Cloudflare Access, so it is not multi-tenant and shouldn't be
+deployed as if it were. **No personal data lives in this repo**: no institution
+names, no health data, no credentials. See
+[Personal data](#personal-data--what-never-gets-committed).
+
 Conventions and the "why" behind the design decisions live in
 [CLAUDE.md](CLAUDE.md); finance setup and operations in
 [docs/FINANCE.md](docs/FINANCE.md).
@@ -221,6 +228,7 @@ npx wrangler secret put VAPID_PRIVATE_KEY     # paste private
 npx wrangler secret put VAPID_SUBJECT         # mailto:you@example.com
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_KEY          # the sb_secret_ key — bypasses RLS
+npx wrangler secret put FORCE_KEY            # any long random string; gates /?force=
 npx wrangler deploy
 ```
 
@@ -229,7 +237,15 @@ never a dependency of this project (it's Node-only and won't run on Workers;
 sending is hand-rolled in `worker/src/webpush.ts`).
 
 To manually fire a notification (for testing):
-`curl https://<worker-domain>/?force=morning` (also `evening`, `weekly`, `finance`).
+
+```bash
+curl 'https://<worker-domain>/?force=morning&key=<FORCE_KEY>'   # also evening, weekly, finance
+```
+
+The Worker answers on a `*.workers.dev` origin, which **Cloudflare Access does
+not cover** — Access protects the Pages domain only. So `/?force=` is gated on
+the `FORCE_KEY` secret and fails closed: without the secret set, every request
+gets a 404, and a wrong key gets the same 404 so the endpoint isn't discoverable.
 
 ## External data ingestion (Apple Health)
 
@@ -289,6 +305,20 @@ FINDINGS.md        what's already been tested, and whether it held up
 ANALYZE.md         the protocol, and the prompt to paste into the chat
 ```
 
+`analysis/CONTEXT.md` and `analysis/FINDINGS.md` accumulate real health data and
+identifying detail, so they are **gitignored**. What's tracked is
+`analysis/CONTEXT.template.md` and `analysis/FINDINGS.template.md` — the
+structure and the maintenance rules, with the data taken out. On a fresh
+checkout:
+
+```bash
+cp analysis/CONTEXT.template.md  analysis/CONTEXT.md
+cp analysis/FINDINGS.template.md analysis/FINDINGS.md
+```
+
+The export warns and carries on if either is missing, so a clone still produces
+a usable bundle. `analysis/ANALYZE.md` is method only and stays tracked.
+
 The folder is zipped alongside itself as `ember-YYYY-MM-DD.zip` — upload that to a
 new chat and paste the prompt at the top of
 [analysis/ANALYZE.md](analysis/ANALYZE.md). At the end of the run, paste the
@@ -313,6 +343,23 @@ to change the other, or two runs stop being comparable.
 The `finance_*` and `push_*` tables are deliberately excluded from the export.
 Tables that don't exist are skipped with a warning, not an error.
 
+## Personal data — what never gets committed
+
+This repo is public; the deployment it describes is not. Everything specific to
+one person's life lives in the database, the environment, or a gitignored file —
+never in a commit:
+
+| | Where it lives |
+| --- | --- |
+| Health data, findings, subject context | `analysis/CONTEXT.md`, `analysis/FINDINGS.md` — gitignored; templates are tracked |
+| Raw database dumps | `analysis-bundles/` — gitignored |
+| Bank, brokerage, loan servicer names | `finance_settings.brokerage_match` / `loan_servicer` / `cc_payment_payee` — see [docs/FINANCE.md](docs/FINANCE.md) |
+| Location, timezone, reminder times | `push_settings` rows |
+| API keys, tokens, Supabase URL | `.env`, `.env.local`, `.dev.vars`, Wrangler secrets, Pages env vars |
+
+`America/Denver` in the schema and in `src/lib/settings.ts` is a fallback
+default, not a stored location; the real one is a `push_settings` row.
+
 ## Notes
 
 - The `entries` table is upserted on the primary key `date`. Morning fills the
@@ -325,3 +372,7 @@ Tables that don't exist are skipped with a warning, not an error.
   `npm run build` is the correctness signal — it typechecks all four sub-projects.
 - Recharts is the largest dep; if bundle size becomes a concern, lazy-load the
   dashboard and finance charts behind `React.lazy()`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

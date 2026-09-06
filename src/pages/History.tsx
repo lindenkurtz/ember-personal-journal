@@ -132,7 +132,6 @@ function DayDetail({
         />
       )}
       {e.sleep_quality != null && <DetailRow label="Sleep quality" value={'★'.repeat(e.sleep_quality)} />}
-      {e.sleep_hours != null && <DetailRow label="Sleep (watch)" value={`${e.sleep_hours}h`} />}
       {e.day_quality != null && <DetailRow label="Day quality" value={'★'.repeat(e.day_quality)} />}
       {(e.gym_intention || e.gym_actual) && (
         <DetailRow label="Gym" value={`${e.gym_intention ?? '—'} → ${e.gym_actual ?? '—'}`} />

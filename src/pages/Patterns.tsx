@@ -18,7 +18,6 @@ const SYSTEM_PROMPT = [
   "Confound flags (illness, alcohol, sleeping away, travel, late caffeine, deadlines) mark rare but",
   "distorting days — use them to explain outliers and discount those days, never as goals in themselves.",
   "Be specific — cite actual numbers where they help. Be honest — don't soften real misses.",
-  "sleep_hours is objective Apple Watch data while sleep_quality is the user's subjective rating — both are useful, and discrepancies between them (e.g. long sleep but low quality, or short sleep but high quality) are worth surfacing.",
   "Don't list bullets unless it's genuinely the clearest format. Prefer 3–5 short paragraphs.",
   "No preamble, no greeting, no sign-off. Don't restate the question."
 ].join(' ')

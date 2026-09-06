@@ -140,7 +140,14 @@ docs/FINANCE.md       finance setup + operations
   a Claude chat by hand; it never goes through `/api/claude`, and nothing about it
   ships in the app.
 
-  Three things to keep true:
+  Supabase is not its only source. `mac_minutes` in `daily_merged.csv` comes from
+  **focusd** (`~/Code/Personal/timetracking/focusd`), a local macOS daemon, by shelling
+  out to `focusctl report --by day` at export time. Nothing is synced or stored —
+  focusd's own rule is that durations are derived at query time, so the export asks
+  it fresh every run. If `focusctl` isn't on PATH the column is null and the rest
+  of the export is unaffected.
+
+  Four things to keep true:
   - **`buildDaily`'s cleaning rules and CONTEXT.md's "Derived fields" /
     "Cleaning rules" sections are one spec written twice.** Change one, change
     the other — otherwise successive runs quietly stop being comparable, which is
@@ -150,6 +157,12 @@ docs/FINANCE.md       finance setup + operations
     be retested on future data, never written up as discoveries. Don't rewrite
     past run lines — their value is that the hypothesis was fixed before the data
     existed.
+  - **`mac_minutes` distinguishes 0 from null, and that distinction is the whole
+    point.** A day focusd observed but credited no attended time to is a real `0`;
+    a day it observed nothing at all is `null`, because focusd can't tell a shut
+    laptop from a dead daemon and inventing the zero would manufacture an
+    observation. The first observed day and the export day are null as partial by
+    construction. Don't "fix" the nulls by filling them.
   - **`finance_*` and `push_*` are excluded from `TABLES` on purpose.** The list
     also names tables with no migration in [supabase/](supabase/)
     (`daily_nutrition`, `body_weight`, `lift_progression`); `fetchAll` skips a
@@ -167,14 +180,23 @@ docs/FINANCE.md       finance setup + operations
 
 - **Row-date semantics differ for sleep vs daily totals.** A row's date D is *the
   day the user woke up* for the sleep fields (`bedtime`, `wake_time`,
-  `sleep_quality`, `sleep_hours`, and `slept_away`) — all describe the night
-  ending on morning D. `bedtime`/`wake_time` are the user-entered window;
-  `sleep_hours` is the Apple Watch's measured duration of that same window. For
-  daily totals (`hrv_avg`, `resting_hr`, `steps`), D is the calendar day the
-  metric was measured, which is why the iOS Shortcut backfills those to D-1 when
-  it runs the next morning. Re-keying `sleep_hours` to the night's *start* date
-  would silently desync it from `sleep_quality` and break the
-  subjective-vs-objective comparison in the prompts.
+  `sleep_quality`, and `slept_away`) — all describe the night ending on morning D.
+  `bedtime`/`wake_time` are the user-entered window. For daily totals (`hrv_avg`,
+  `resting_hr`, `steps`), D is the calendar day the metric was measured, which is
+  why the iOS Shortcut backfills those to D-1 when it runs the next morning.
+  Re-keying a sleep field to the night's *start* date would silently desync it
+  from `sleep_quality`.
+
+- **`sleep_hours` is retired (Sept 2026); its 4 rows are permanent.** It was meant
+  to be the Apple Watch's measured duration of the `bedtime`/`wake_time` window,
+  written by the iOS Shortcut, but the Shortcut never reliably sent it — the column
+  holds 4 days from May 2026 and nothing since. The column and those rows stay in
+  the DB, and nothing reads, renders, writes, or exports it (same rule as the
+  `deep_work_*` columns and `computer_minutes`). **There is now no objective sleep
+  measurement anywhere in the dataset** — self-reported `bedtime`/`wake_time` are
+  the only duration evidence, so don't describe any sleep number as objective or
+  watch-measured. If a reliable source ever appears, it lands as a new field with
+  its own `*_START` constant, not by reviving this one.
 
 - **Nullable means untracked, not "no."** The six confound flags (`sick`,
   `alcohol`, `slept_away`, `travel_day`, `caffeine_late`, `deadline_pressure`)
@@ -227,6 +249,10 @@ docs/FINANCE.md       finance setup + operations
   moved to a separate system: the column and its rows stay in the DB, but nothing
   selects, writes, or exports it, and it was never backfilled into `ipad_minutes`
   — the two measure different devices. Same rule as the `deep_work_*` columns.
+  That separate system is **focusd**, and it stays separate — Mac time is measured
+  automatically, never entered at `/screentime`, and reaches only the analysis
+  bundle (as `mac_minutes`), never Supabase, the Dashboard, or `/patterns`. Don't
+  add a `mac_minutes` column to `screen_time`.
 
 - **`context_periods` overlap is impossible at the DB level** — a gist EXCLUDE
   constraint over `daterange(start_date, end_date, '[]')` with *inclusive*
@@ -268,9 +294,11 @@ docs/FINANCE.md       finance setup + operations
 
 - **Patterns has exactly one target.** `day_quality` (1–5, captured in the
   evening) is what Claude looks for predictors of. A new tracked field is always
-  a *predictor* — never promote it to a second target. Subjective/objective pairs
-  (e.g. `sleep_quality` vs `sleep_hours`) must be framed as such in the prompts
+  a *predictor* — never promote it to a second target. Where a subjective and an
+  objective measure of the same thing both exist, frame them as such in the prompts
   so Claude can surface discrepancies; both are signal, neither is ground truth.
+  Right now the only such pair is self-rated `focused_work` against `mac_minutes`
+  in the analysis bundle — sleep has no objective half since `sleep_hours` retired.
   Confound flags are framed as *confounders* (explain outliers, discount
   distorted days), never as goals.
 
@@ -379,6 +407,12 @@ editor, not in code.
 - New derived column or changed cleaning rule: edit `buildDaily` **and** the
   matching bullet in [analysis/CONTEXT.md](analysis/CONTEXT.md) in the same
   commit.
+- Changing the Mac number: it comes from `focusctl`, not the database — see
+  `fetchMacMinutes` in the export script. `--attended` is the deliberate choice
+  (unfiltered counts a machine left awake, which is what killed `computer_minutes`);
+  the parser reads `focusctl report`'s text output, so it's worth re-running the
+  export after a focusd upgrade. A format change makes it warn and null the column,
+  not fail.
 - New known data-quality problem: CONTEXT.md, "Known data-quality problems".
   These are the guardrails that stop a run from reporting an artifact as a
   finding — worth writing down the moment you notice one.

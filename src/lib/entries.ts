@@ -44,7 +44,10 @@ export interface Entry {
   bedtime: string | null // 'HH:MM' last night
   wake_time: string | null // 'HH:MM' this morning
   sleep_quality: number | null // 1–5
-  sleep_hours: number | null // objective duration from Apple Watch, written by iOS Shortcut
+  // sleep_hours: RETIRED. The Apple Watch duration the iOS Shortcut was meant to
+  // write; it only ever landed on 4 days in May 2026. The column and those rows
+  // stay in the DB (same rule as deep_work_* and computer_minutes), but nothing
+  // reads, renders, or exports it — so there is no objective sleep measure.
   day_quality: number | null // 1–5, evening self-report of the day overall
   gym_intention: GymChoice | null
   gym_actual: GymChoice | null

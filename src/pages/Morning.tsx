@@ -374,7 +374,7 @@ function buildNudgePrompt(
       gym_intention: today.gym_intention
     }),
     '',
-    'Write the nudge. Do not invent fields or units that are not in the schema. Only reference hours of sleep if `sleep_h` is non-null for the relevant day.'
+    'Write the nudge. Do not invent fields or units that are not in the schema. Only reference how long he slept if both `bed` and `wake` are non-null for the relevant day.'
   )
   return sections.join('\n')
 }

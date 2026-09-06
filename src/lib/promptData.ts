@@ -32,7 +32,6 @@ export function buildCompactRows(
       bed: e.bedtime,
       wake: e.wake_time,
       sleep: e.sleep_quality,
-      sleep_h: e.sleep_hours,
       dq: e.day_quality,
       gym_i: e.gym_intention,
       gym_a: e.gym_actual,
@@ -64,7 +63,7 @@ export function buildCompactRows(
 export const FIELD_LEGEND = [
   'Field key (all fields nullable; null = not logged):',
   "  d = date. bed = bedtime, wake = wake time — both 'HH:MM' local clock times, NOT durations.",
-  '  sleep = self-reported sleep quality 1–5 (subjective). sleep_h = objective sleep duration in hours from Apple Watch — both describe the night ending that morning; discrepancies between them are worth surfacing.',
+  '  sleep = self-reported sleep quality 1–5 (subjective), describing the night ending that morning. There is no objective sleep measurement — bed/wake are the only duration evidence, and they are self-reported too.',
   '  dq = self-reported day quality 1–5 (PRIMARY TARGET — find what predicts this).',
   "  gym_i = morning gym intention ('yes'|'no'), gym_a = evening actual.",
   '  dw_p / dw_a = deep-work intention / actual hours — tracking RETIRED mid-July 2026 and replaced by fw; values exist only on older dates.',
@@ -81,7 +80,7 @@ export const FIELD_LEGEND = [
 ].join('\n')
 
 export const SPARSE_NOTE =
-  'HRV, resting heart rate, steps, sleep_h, weather, and screen time (st_*) are sparsely populated ' +
+  'HRV, resting heart rate, steps, weather, and screen time (st_*) are sparsely populated ' +
   'signals. Only draw conclusions from them when enough non-null values exist; always caveat findings ' +
   'based on sparse data, and never treat a missing value as zero. They help explain patterns in the ' +
   'primary metrics (sleep, gym, focused work) — they are not goals in themselves.'

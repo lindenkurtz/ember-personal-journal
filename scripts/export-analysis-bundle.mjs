@@ -11,6 +11,9 @@
  *        SUPABASE_URL=https://xxxx.supabase.co
  *        SUPABASE_SERVICE_KEY=eyJ...        <- service_role key, NOT the anon key
  *   2. Make sure analysis/CONTEXT.md, analysis/FINDINGS.md and analysis/ANALYZE.md exist.
+ *   3. Optional: install focusd so `focusctl` is on PATH, and Mac screen time is
+ *      merged in as `mac_minutes`. Without it that column is null and nothing else
+ *      changes — see the focusd section below.
  *
  * Run:
  *   node scripts/export-analysis-bundle.mjs
@@ -98,15 +101,110 @@ const hhmmToMin = (t) => {
   return Number(m[1]) * 60 + Number(m[2]);
 };
 
+// --- Mac screen time, via focusd --------------------------------------------
+//
+// focusd is a separate local daemon (~/Code/Personal/timetracking/focusd) that records
+// which macOS app is frontmost once a minute. Its own first rule is that durations
+// are derived at query time and never stored, so this shells out to focusctl on
+// every export instead of keeping a synced copy — the number always reflects
+// focusd's current config rather than whatever it was on the day of some old sync.
+//
+// Two runs, because the difference between them is what separates a real zero from
+// an unobserved day:
+//   --attended   screen on, unlocked, input within attended_max_idle_seconds
+//   unfiltered   every heartbeat, including a machine parked at the login window
+// A day focusd observed but credited no attended time to is a true 0. A day it
+// observed nothing at all is null: it cannot tell a shut laptop from a crashed
+// daemon, and METHODOLOGY.md forbids manufacturing the observation.
+
+const FOCUSCTL = 'focusctl'; // override here if it isn't on PATH
+
+/** "  4h06m52s   3.5%  2026-09-04" — the only lines of `report --by day` we want. */
+const DAY_LINE = /^\s*(\d+)h(\d+)m(\d+)s\s+[\d.]+%\s+(\d{4}-\d{2}-\d{2})\s*$/;
+
+const nextDayKey = (k) => {
+  const d = new Date(`${k}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+const focusctlDays = (extraArgs) => {
+  const out = execSync(`${FOCUSCTL} report --by day --top 100000 ${extraArgs}`, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const days = new Map();
+  for (const line of out.split('\n')) {
+    const m = line.match(DAY_LINE);
+    if (m) days.set(m[4], (Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 60));
+  }
+  return days;
+};
+
+/** date -> attended minutes. Null (the whole map) when focusd isn't reachable. */
+const fetchMacMinutes = () => {
+  let attended, observed;
+  try {
+    attended = focusctlDays('--attended');
+    observed = focusctlDays('');
+  } catch {
+    console.warn(`  ! ${FOCUSCTL} not runnable — mac_minutes will be null on every row`);
+    return null;
+  }
+  if (!observed.size) {
+    // Either an empty database or the report's output format moved under us. Both
+    // are worth seeing rather than silently exporting a column of nulls.
+    console.warn(`  ! ${FOCUSCTL} returned no parseable days — mac_minutes will be null`);
+    return null;
+  }
+
+  const days = [...observed.keys()].sort();
+  const first = days[0];
+  const last = days.at(-1);
+  // System-local, to match the journal's date keys. focusd buckets in America/Denver;
+  // the two agree on the machine this runs on.
+  const today = new Date().toLocaleDateString('en-CA');
+
+  const minutes = new Map();
+  const unobserved = [];
+  for (let d = first; d <= last; d = nextDayKey(d)) {
+    if (!observed.has(d)) {
+      unobserved.push(d);
+      continue;
+    }
+    // The first day is partial by construction (the daemon was installed partway
+    // through it), and today is still in progress. Both would read as a low day.
+    if (d === first || d === today) continue;
+    minutes.set(d, Math.round(attended.get(d) ?? 0));
+  }
+
+  console.log(
+    `  mac_minutes (focusd)  ${String(minutes.size).padStart(5)} days  ${first} \u2192 ${last}` +
+      `  (${first} partial${last === today ? `, ${today} in progress` : ''})`
+  );
+  if (unobserved.length) {
+    console.warn(
+      `  ! focusd observed nothing on ${unobserved.length} day(s) in its span — ` +
+        `null, not 0: ${unobserved.join(', ')}`
+    );
+  }
+  return minutes;
+};
+
 // --- derived daily table ----------------------------------------------------
 //
 // Every cleaning rule below is documented in CONTEXT.md. If you change one here,
 // change it there too — otherwise each analysis run silently diverges.
 
-const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
+const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
   const nutByDate = new Map((nutrition ?? []).map((r) => [r.date, r]));
   const wtByDate = new Map((weight ?? []).map((r) => [r.date, r]));
   const scrByDate = new Map((screen ?? []).map((r) => [r.date, r]));
+
+  // Nullable means untracked, not "no": the six confound flags have no DB default
+  // and were only written from 2026-07-21 on. Collapsing null to 0 here would claim
+  // every earlier day was a not-sick, not-drinking, at-home day.
+  const flag = (v) => (v == null ? null : v ? 1 : 0);
 
   const resolveContext = (d) => {
     const hit = (contexts ?? []).find(
@@ -157,12 +255,12 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
       social: e.social === true ? 1 : e.social === false ? 0 : null,
       focused_work: e.focused_work ?? null,
 
-      sick: e.sick ? 1 : 0,
-      alcohol: e.alcohol ? 1 : 0,
-      slept_away: e.slept_away ? 1 : 0,
-      travel_day: e.travel_day ? 1 : 0,
-      caffeine_late: e.caffeine_late ? 1 : 0,
-      deadline_pressure: e.deadline_pressure ? 1 : 0,
+      sick: flag(e.sick),
+      alcohol: flag(e.alcohol),
+      slept_away: flag(e.slept_away),
+      travel_day: flag(e.travel_day),
+      caffeine_late: flag(e.caffeine_late),
+      deadline_pressure: flag(e.deadline_pressure),
 
       calories: calsOk ? n.calories : null,
       protein_g: calsOk ? n.protein_g : null,
@@ -174,6 +272,7 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
       phone_minutes: s.phone_minutes ?? null,
       phone_pickups: s.phone_pickups ?? null,
       ipad_minutes: s.ipad_minutes ?? null,
+      mac_minutes: mac?.get(d) ?? null,
 
       hrv_avg: e.hrv_avg ?? null,
       resting_hr: e.resting_hr ?? null,
@@ -188,6 +287,12 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts }) => {
   // Lets the analysis test the adaptation curve instead of guessing at it.
   let run = 0;
   for (const r of rows) {
+    // An untracked night can't extend or end a run — both would be a guess.
+    if (r.slept_away === null) {
+      run = 0;
+      r.away_night_index = null;
+      continue;
+    }
     run = r.slept_away ? run + 1 : 0;
     r.away_night_index = run || null;
   }
@@ -250,6 +355,7 @@ const main = async () => {
     weight: pulled.body_weight,
     screen: pulled.screen_time,
     contexts: pulled.context_periods,
+    mac: fetchMacMinutes(),
   });
   writeFileSync(join(outDir, 'daily_merged.csv'), toCsv(daily));
   console.log(`\n  daily_merged.csv     ${daily.length} rows (cleaned + derived)`);

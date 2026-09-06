@@ -49,7 +49,10 @@ create table public.entries (
   bedtime           time,
   wake_time         time,           -- user-entered, this morning's wake time (same row-date semantics as bedtime)
   sleep_quality     smallint check (sleep_quality between 1 and 5),
-  sleep_hours       numeric(4,2),   -- objective duration in hours from Apple Watch, written by iOS Shortcut
+  -- sleep_hours: RETIRED Sept 2026. Meant to be the Apple Watch's measured
+  -- duration, but the Shortcut never reliably sent it — 4 rows from May 2026 and
+  -- nothing since. Kept so those rows survive; nothing reads or writes it.
+  sleep_hours       numeric(4,2),
   day_quality       smallint check (day_quality between 1 and 5),
   gym_intention     text check (gym_intention in ('yes','no','rest')),
   gym_actual        text check (gym_actual    in ('yes','no','rest')),
@@ -243,7 +246,7 @@ Headers:
   Prefer: resolution=merge-duplicates
 
 Body:
-  { "date": "YYYY-MM-DD", "hrv_avg": 45.2, "resting_hr": 58, "steps": 8432, "sleep_hours": 7.25 }
+  { "date": "YYYY-MM-DD", "hrv_avg": 45.2, "resting_hr": 58, "steps": 8432 }
 ```
 
 Notes:
@@ -251,11 +254,14 @@ Notes:
 - Use `Prefer: resolution=merge-duplicates` so the POST upserts into today's
   row alongside the morning/evening fields rather than failing on the primary
   key conflict.
-- **Date keying:** `sleep_hours` is keyed to the morning the user woke up
-  (same day as `sleep_quality`, `bedtime`, and `wake_time`) — i.e. when the
-  Shortcut runs on morning D, `sleep_hours` is written to D, **not** D-1.
-  The daily totals (`hrv_avg`, `resting_hr`, `steps`) are keyed to the day they
-  were measured, which means they *are* backfilled to D-1 on the morning-D run.
+- **Date keying:** the daily totals (`hrv_avg`, `resting_hr`, `steps`) are keyed
+  to the day they were *measured*, which means the morning-D run backfills them to
+  D-1. This is the opposite of the sleep fields (`bedtime`, `wake_time`,
+  `sleep_quality`), which are keyed to the morning the user woke up.
+- **If your Shortcut still sends `sleep_hours`, remove it.** The field is retired
+  as of Sept 2026 — nothing in the app reads it, so a value sent now is written to
+  a column no surface displays. Sleep duration comes from the self-reported
+  `bedtime`/`wake_time` window instead.
 - Omit fields you don't have a value for — never send `0` as a default.
   Missing data must stay null so the Patterns analyzer can correctly identify
   these as sparse signals.

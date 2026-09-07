@@ -15,8 +15,9 @@ interface ChatBody {
   system?: string
   stream?: boolean
   max_tokens?: number
-  // Optional base64 images for vision (e.g. parsing a screenshot of a
-  // transaction list). Sonnet 4.6 downscales each to ~1600 tokens max.
+  // Optional base64 images for vision. No caller passes these since the
+  // finance screenshot import was retired; the proxy still supports them.
+  // Sonnet 4.6 downscales each to ~1600 tokens max.
   images?: { media_type: string; data: string }[]
 }
 

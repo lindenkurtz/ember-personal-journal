@@ -1,8 +1,8 @@
 # Ember
 
 A small, private daily journal for tracking sleep, gym, focused work, social
-time, meal timing, confounding events, and screen time — plus a personal finance
-dashboard at `/finance`. Single-user PWA. Lives behind Cloudflare Access. Built
+time, meal timing, confounding events, and screen time — plus a net-worth
+tracker at `/finance`. Single-user PWA. Lives behind Cloudflare Access. Built
 with React + Vite, Supabase, and the Claude API.
 
 Built for one person (me), but the code is public and MIT-licensed. It has no
@@ -21,11 +21,10 @@ Conventions and the "why" behind the design decisions live in
 - **React + Vite** (TypeScript), deployed as a static site to Cloudflare Pages
 - **Supabase** for persistence — `entries` (one row per day), `screen_time`,
   `context_periods`, `push_*`, and the `finance_*` tables
-- **Anthropic Claude** for the patterns analysis and screenshot transaction
-  extraction — called through a Cloudflare Pages Function so the API key never
-  ships to the browser
-- **Plaid** for bank sync, called via raw REST from a Pages Function and the
-  cron Worker
+- **Anthropic Claude** for the patterns analysis — called through a Cloudflare
+  Pages Function so the API key never ships to the browser
+- **Plaid** for bank balance sync, called via raw REST from a Pages Function and
+  the cron Worker
 - **Plus Jakarta Sans** + warm palette
 
 ## Setup
@@ -170,7 +169,7 @@ worker/                   separate Cloudflare Worker — 5-min cron: push
                           notifications, weather snapshot, daily Plaid sync
 src/lib/                  supabase, entries, screenTime, contextPeriods,
                           settings, push, promptData, claude, date, streaks
-src/lib/finance/          SPA-side finance data access + screenshot extraction
+src/lib/finance/          SPA-side finance data access
 src/components/           QuestionCard, ProgressDots, StarRating, PillGroup,
                           ToggleChipGroup, TimeInput, DurationWheelPicker,
                           NoteInput, CheckInCard, StatCard, DotCalendar,
@@ -193,7 +192,7 @@ analysis/                 CONTEXT / FINDINGS / ANALYZE docs shipped in each bund
 - `/history` — read-only look-back over every day, incl. legacy deep-work data and confound badges
 - `/screentime` — weekly batch entry of daily screen-time values
 - `/patterns` — on-demand 30-day analysis from Claude, streamed in
-- `/finance` — net worth, cash flow, transactions, review queue (see docs/FINANCE.md)
+- `/finance` — net worth over time, account balances, loan balance (see docs/FINANCE.md)
 - `/settings` — reminder times, push subscription toggle, gym rest budget, location
 
 ## Icons
@@ -353,7 +352,7 @@ never in a commit:
 | --- | --- |
 | Health data, findings, subject context | `analysis/CONTEXT.md`, `analysis/FINDINGS.md` — gitignored; templates are tracked |
 | Raw database dumps | `analysis-bundles/` — gitignored |
-| Bank, brokerage, loan servicer names | `finance_settings.brokerage_match` / `loan_servicer` / `cc_payment_payee` — see [docs/FINANCE.md](docs/FINANCE.md) |
+| Loan servicer name | `finance_settings.loan_servicer` — see [docs/FINANCE.md](docs/FINANCE.md) |
 | Location, timezone, reminder times | `push_settings` rows |
 | API keys, tokens, Supabase URL | `.env`, `.env.local`, `.dev.vars`, Wrangler secrets, Pages env vars |
 

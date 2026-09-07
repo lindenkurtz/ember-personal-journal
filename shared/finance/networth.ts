@@ -8,7 +8,7 @@ export interface NetWorthResult {
 
 /**
  * Net Worth = Σ(included asset balances) − Σ(liabilities).
- * Apple Card and any account with include_in_net_worth=false are excluded.
+ * Any account with include_in_net_worth=false is excluded.
  * Liabilities come from finance_loan_balances, not from accounts.
  */
 export function computeNetWorth(

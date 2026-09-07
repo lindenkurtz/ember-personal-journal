@@ -1,7 +1,7 @@
 /*
  * Cloudflare Pages Function — exchanges a Plaid public_token for an access
  * token, persists the Item (server-only table), and seeds account metadata.
- * The Apple Card / any credit account is seeded with include_in_net_worth=false.
+ * Credit and loan accounts are seeded with include_in_net_worth=false.
  */
 import { createClient } from '@supabase/supabase-js'
 import { exchangePublicToken, getAccounts } from '../../../shared/finance/plaidApi'

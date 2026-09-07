@@ -23,11 +23,3 @@ export async function updateAccount(patch: AccountPatch): Promise<FinanceAccount
   if (error) throw error
   return data as FinanceAccount
 }
-
-/** Upsert a non-Plaid account (the synthetic Apple Card CSV account). */
-export async function ensureLocalAccount(row: FinanceAccount): Promise<void> {
-  const { error } = await supabase
-    .from('finance_accounts')
-    .upsert(row, { onConflict: 'account_id', ignoreDuplicates: true })
-  if (error) throw error
-}

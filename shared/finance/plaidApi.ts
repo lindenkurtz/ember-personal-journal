@@ -22,25 +22,6 @@ export interface PlaidAccount {
   }
 }
 
-export interface PlaidTransaction {
-  transaction_id: string
-  account_id: string
-  amount: number // Plaid: positive = outflow. We invert on ingest.
-  date: string
-  name: string | null
-  merchant_name: string | null
-  pending: boolean
-  personal_finance_category?: { primary?: string; detailed?: string } | null
-}
-
-export interface TransactionsSyncResponse {
-  added: PlaidTransaction[]
-  modified: PlaidTransaction[]
-  removed: { transaction_id: string }[]
-  next_cursor: string
-  has_more: boolean
-}
-
 export interface StudentLoan {
   account_id: string
   outstanding_interest_amount: number | null
@@ -79,9 +60,12 @@ export function createLinkToken(env: PlaidEnv, clientUserId: string, redirectUri
     language: 'en',
     country_codes: ['US'],
     user: { client_user_id: clientUserId },
-    products: ['transactions'],
-    // Balances are always available; liabilities is requested opportunistically
-    // per-item at sync time and tolerated when an institution doesn't support it.
+    // Transaction ingest was retired (Sept 2026), so a new item only needs
+    // Balance. Existing items keep whatever they were linked with — this
+    // narrows what future links consent to, it does not re-scope old ones.
+    products: ['balance'],
+    // Requested opportunistically per-item at sync time and tolerated when an
+    // institution doesn't support it.
     optional_products: ['liabilities'],
     ...(redirectUri ? { redirect_uri: redirectUri } : {})
   })
@@ -102,14 +86,6 @@ export function getAccounts(env: PlaidEnv, accessToken: string) {
 export function getBalances(env: PlaidEnv, accessToken: string) {
   return plaidPost<{ accounts: PlaidAccount[] }>(env, '/accounts/balance/get', {
     access_token: accessToken
-  })
-}
-
-export function transactionsSync(env: PlaidEnv, accessToken: string, cursor: string | null) {
-  return plaidPost<TransactionsSyncResponse>(env, '/transactions/sync', {
-    access_token: accessToken,
-    ...(cursor ? { cursor } : {}),
-    count: 250
   })
 }
 

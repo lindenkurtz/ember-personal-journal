@@ -1,9 +1,16 @@
 # Finance feature — setup & operations
 
-A personal finance dashboard at `/finance`: Plaid-synced balances/transactions,
-Apple Card / Apple Cash import by screenshot, transaction classification +
-review queue, and net-worth snapshots charted over time. Pure visibility — no
-budgets or alerts.
+A net-worth tracker at `/finance`: Plaid-synced account balances, loan balances,
+and a daily net-worth snapshot charted over time. Pure visibility — no budgets or
+alerts.
+
+**Scope note (Sept 2026).** This page used to do a great deal more — transaction
+ingest and classification, screenshot import for two manually-tracked card/cash
+accounts Plaid can't reach, a review queue, user-authored rules, monthly
+cash-flow and category panels, and savings-rate tracking. All of it was retired unused. Following the repo's
+retirement precedent, the tables and every row in them are **permanent** — see
+the header of [supabase/finance_migration.sql](../supabase/finance_migration.sql) —
+but nothing reads or writes them any more.
 
 ## One-time setup
 
@@ -57,45 +64,29 @@ npx wrangler secret put PLAID_ENV
   ([functions/api/plaid/sync.ts](../functions/api/plaid/sync.ts)) and the daily
   cron Worker ([worker/src/index.ts](../worker/src/index.ts) → `financeTick`,
   deduped once per local day).
-- **Classification** ([shared/finance/classify.ts](../shared/finance/classify.ts)):
-  Venmo/peer → review queue; a configured payee → Credit Card Payment (transfer);
-  Apple Cash cash-back → income; Plaid transfers → internal transfers; otherwise
-  the Plaid category map. User edits on a `reviewed` row are never clobbered by
-  a re-sync.
+- **Each sync** pulls `/accounts/balance/get` per item (which also discovers and
+  refreshes account metadata, never clobbering your `include_in_net_worth` /
+  `is_asset` toggles), then `/liabilities/get` opportunistically, then writes one
+  `finance_balances` row per account per day and one net-worth snapshot.
 - **Net worth** = included asset balances − loan balances, snapshotted each sync.
-- **Apple Card / Apple Cash are screenshot-only.** Plaid can't reach them and,
-  as a Family participant, the user can't CSV-export either. Both are synthetic
-  accounts defined in [src/lib/finance/localAccounts.ts](../src/lib/finance/localAccounts.ts)
-  and excluded from net worth (Apple Card isn't the user's liability; Apple Cash
-  has no connected balance to snapshot) — their transactions still feed spending
-  and cash flow. To import: **Add from screenshot** on `/finance`, pick the
-  account, upload screenshots of the Wallet / card.apple.com transaction list.
-  Claude (through the `/api/claude` vision proxy,
-  [src/lib/finance/extract.ts](../src/lib/finance/extract.ts)) returns rows tagged
-  with our categories; you review them, then confirm to insert. Re-importing the
-  same screenshot is a no-op — ids are a content hash
-  ([src/lib/finance/hash.ts](../src/lib/finance/hash.ts)). Cost is ~2¢/screenshot.
-  Note the Apple Card account id is still `csv-apple-card` and its `source` is
-  `'csv'`: those are frozen strings that keep existing rows joined, not a live
-  CSV path. Don't "fix" them.
-- **Savings rates** are read off each transaction's `savings_bucket`
-  (`short_term` = emergency fund, `long_term` = savings/brokerage,
-  `retirement` = retirement account). It auto-sets when money lands in a matched
-  savings account; if those accounts aren't connected, label the source-side
-  outflow manually in the transaction editor. One label per transfer, so it's
-  never double-counted.
+  Toggle an account in or out by tapping it in the Accounts card.
+- **Link asks for `balance` only.** Transaction ingest is gone, so
+  `createLinkToken` no longer requests the `transactions` product. Items linked
+  before Sept 2026 keep whatever scope they were created with — this narrows
+  future links, it does not re-scope existing ones.
 
 ## Naming your own institutions
 
 **No bank, brokerage, or loan servicer is named anywhere in this repo** — the
-repo is public. The two places the app needs one, it reads from
+repo is public. The one place the app still needs a name, it reads from
 `finance_settings` (singleton row, id = 1):
 
 | Column | What to put there |
 | --- | --- |
-| `brokerage_match` | Comma-separated substrings identifying transfers bound for your brokerage — its name plus whatever abbreviation appears in a memo line (e.g. `acme invest,acme inv`). Null leaves those classifier branches off. |
 | `loan_servicer` | Display name for your loan, e.g. on `/finance` and as the write key for `finance_loan_balances`. Null skips the Plaid liabilities write entirely. |
-| `cc_payment_payee` | Payee whose payments should classify as a credit-card payment. |
+
+`brokerage_match` and `cc_payment_payee` are still columns on that table but are
+classification-era leftovers — nothing reads them. Leave them as they are.
 
 `loan_servicer` is also the **upsert key** for loan rows and the net-worth
 rollup sums the latest balance per distinct servicer — so change it and the old
@@ -108,10 +99,7 @@ once and leave it.
 1. `npm run build && npm run pages:dev`.
 2. Open `/finance` → **Connect account** → pick a bank → Plaid Sandbox creds
    `user_good` / `pass_good`.
-3. **Sync now** → confirm balances, transactions, a net-worth snapshot, and that
-   Venmo/peer items land in the review queue.
-4. **Add from screenshot** with any Apple Card / Apple Cash screenshot → rows
-   appear in the review sheet; confirm, then re-upload the same image and check
-   that nothing duplicates.
-5. Daily cron: `cd worker && npm run tick`, then hit `/?force=finance` to fire a
+3. **Sync now** → confirm account balances, a net-worth snapshot, and that the
+   chart's per-account dropdown lists the linked accounts.
+4. Daily cron: `cd worker && npm run tick`, then hit `/?force=finance` to fire a
    sync immediately; a second call the same day is a no-op (dedup).

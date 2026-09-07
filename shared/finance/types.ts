@@ -1,23 +1,14 @@
 // Runtime-agnostic finance types, shared by the SPA, the Pages Function, and
 // the cron Worker. Keep this file free of DOM- and Workers-only globals so all
 // three TypeScript projects can compile it.
-
-export type Category =
-  | 'income'
-  | 'transfer'
-  | 'housing'
-  | 'groceries'
-  | 'dining'
-  | 'subscriptions'
-  | 'health'
-  | 'transportation'
-  | 'school_work'
-  | 'shopping'
-  | 'peer_payment'
+//
+// Transaction ingest and classification were retired (Sept 2026). The
+// `finance_transactions` / `finance_rules` tables and their rows are permanent —
+// see the note in supabase/finance_migration.sql — but nothing types, reads, or
+// writes them any more, so the Category / FinanceTransaction / FinanceRule /
+// SavingsBucket types are gone with the code that used them.
 
 export type FinanceSource = 'plaid' | 'csv' | 'manual'
-
-export type SavingsBucket = 'short_term' | 'long_term' | 'retirement'
 
 export interface FinanceAccount {
   account_id: string
@@ -32,35 +23,6 @@ export interface FinanceAccount {
   include_in_net_worth: boolean
   source: FinanceSource
   last_synced_at: string | null
-}
-
-export interface FinanceTransaction {
-  id: string
-  account_id: string | null
-  date: string // YYYY-MM-DD
-  amount: number // inflow positive, outflow negative
-  merchant_name: string | null
-  name: string | null
-  plaid_category: string | null
-  category: Category
-  notes: string | null
-  is_transfer: boolean
-  is_split: boolean
-  split_amount: number | null
-  // Labels a transfer as a savings/retirement contribution so it feeds the
-  // savings-rate panel. Independent of is_transfer (a savings move is still a
-  // transfer for cash-flow purposes). null = not a savings contribution.
-  savings_bucket: SavingsBucket | null
-  // Free-text payer label that splits the income bar (e.g. 'AcmeCorp').
-  // Only meaningful on income rows; null = the "Misc" bucket. Open-ended by
-  // design — a new income stream is a new rule, never a code/enum change.
-  income_source: string | null
-  flagged_for_review: boolean
-  reviewed: boolean
-  source: FinanceSource
-  pending: boolean
-  created_at?: string
-  updated_at?: string
 }
 
 export interface FinanceBalance {
@@ -86,37 +48,14 @@ export interface LoanBalance {
 export interface FinanceSettings {
   id: number
   plaid_env: string
-  cc_payment_payee: string | null
-  // Comma-separated substrings naming the external brokerage/savings institution
-  // that transfers are headed for — its name, plus whatever abbreviation shows up
-  // in a memo line. Null = none configured, and those classifier branches simply
-  // don't fire. Kept in the DB so no institution name is hardcoded here.
-  brokerage_match: string | null
   // Display name of the loan servicer behind finance_loan_balances. Null = no
   // loan tracked. Doubles as the write key, so changing it strands existing rows.
   loan_servicer: string | null
   last_full_sync_date: string | null
 }
 
-// A user-defined classification rule. `match_text` is a lowercased substring
-// tested against a transaction's merchant_name + name; the first matching rule
-// wins and stamps its category/note/savings_bucket. Created from a single
-// transaction in the editor, applied to all future matches.
-export interface FinanceRule {
-  id: number
-  match_text: string
-  category: Category
-  note: string | null
-  savings_bucket: SavingsBucket | null
-  income_source: string | null
-  created_at?: string
-}
-
 export interface SyncSummary {
   accounts: number
-  added: number
-  modified: number
-  removed: number
   net_worth: number | null
   errors: string[]
 }

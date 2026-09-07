@@ -1,15 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import type { FinanceAccount, FinanceRule, FinanceSettings, SyncSummary } from './types'
-import { classify, parseBrokerageMatch } from './classify'
+import type { FinanceAccount, FinanceSettings, SyncSummary } from './types'
 import { computeNetWorth } from './networth'
-import {
-  PlaidAccount,
-  PlaidTransaction,
-  getBalances,
-  getLiabilities,
-  transactionsSync,
-  PlaidError
-} from './plaidApi'
+import { PlaidAccount, getBalances, getLiabilities, PlaidError } from './plaidApi'
 
 // One env shape for both callers. The Pages Function maps its
 // SUPABASE_SERVICE_KEY into SUPABASE_KEY; the cron Worker already uses
@@ -26,16 +18,10 @@ interface ItemRow {
   item_id: string
   access_token: string
   institution_name: string | null
-  transactions_cursor: string | null
 }
 
 function utcToday(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-// Plaid amount is positive for outflows; we store inflow-positive.
-function signedAmount(t: PlaidTransaction): number {
-  return -t.amount
 }
 
 function defaultAssetFlags(type: string | null): { is_asset: boolean; include: boolean } {
@@ -46,47 +32,24 @@ function defaultAssetFlags(type: string | null): { is_asset: boolean; include: b
 export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<SyncSummary> {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, { auth: { persistSession: false } })
   const plaidEnv = { PLAID_CLIENT_ID: env.PLAID_CLIENT_ID, PLAID_SECRET: env.PLAID_SECRET, PLAID_ENV: env.PLAID_ENV }
-  const summary: SyncSummary = { accounts: 0, added: 0, modified: 0, removed: 0, net_worth: null, errors: [] }
+  const summary: SyncSummary = { accounts: 0, net_worth: null, errors: [] }
 
-  const [{ data: itemRows }, { data: acctRows }, { data: ruleRows }, { data: settingsRow }] = await Promise.all([
-    supabase.from('finance_plaid_items').select('item_id, access_token, institution_name, transactions_cursor'),
+  const [{ data: itemRows }, { data: acctRows }, { data: settingsRow }] = await Promise.all([
+    supabase.from('finance_plaid_items').select('item_id, access_token, institution_name'),
     supabase.from('finance_accounts').select('*'),
-    supabase.from('finance_rules').select('*'),
-    supabase.from('finance_settings').select('brokerage_match, loan_servicer').eq('id', 1).maybeSingle()
+    supabase.from('finance_settings').select('loan_servicer').eq('id', 1).maybeSingle()
   ])
 
   const items = (itemRows ?? []) as ItemRow[]
   const accountsById = new Map<string, FinanceAccount>()
   for (const a of (acctRows ?? []) as FinanceAccount[]) accountsById.set(a.account_id, a)
-  const rules = (ruleRows ?? []) as FinanceRule[]
-  const settings = settingsRow as Pick<FinanceSettings, 'brokerage_match' | 'loan_servicer'> | null
-  const brokerageMatch = parseBrokerageMatch(settings?.brokerage_match)
+  const settings = settingsRow as Pick<FinanceSettings, 'loan_servicer'> | null
 
-  const incoming: PlaidTransaction[] = []
-  const removedIds: string[] = []
   const balanceRows: { account_id: string; as_of: string; balance: number; synced_at: string }[] = []
   const nowIso = new Date().toISOString()
 
   for (const item of items) {
-    // 1. Transactions — cursor-based, paginated.
-    try {
-      let cursor = item.transactions_cursor
-      let hasMore = true
-      while (hasMore) {
-        const page = await transactionsSync(plaidEnv, item.access_token, cursor)
-        incoming.push(...page.added, ...page.modified)
-        summary.added += page.added.length
-        summary.modified += page.modified.length
-        for (const r of page.removed) removedIds.push(r.transaction_id)
-        cursor = page.next_cursor
-        hasMore = page.has_more
-      }
-      await supabase.from('finance_plaid_items').update({ transactions_cursor: cursor }).eq('item_id', item.item_id)
-    } catch (e) {
-      summary.errors.push(`transactions ${item.item_id}: ${String(e)}`)
-    }
-
-    // 2. Balances — also discovers/refreshes account metadata.
+    // 1. Balances — also discovers/refreshes account metadata.
     try {
       const { accounts } = await getBalances(plaidEnv, item.access_token)
       for (const pa of accounts) {
@@ -99,7 +62,7 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
       summary.errors.push(`balances ${item.item_id}: ${String(e)}`)
     }
 
-    // 3. Liabilities. Tolerated when an institution doesn't support the endpoint.
+    // 2. Liabilities. Tolerated when an institution doesn't support the endpoint.
     // `servicer` is the upsert key and the net-worth rollup sums one balance per
     // distinct servicer, so it has to stay byte-stable across syncs or an old
     // spelling lingers forever and double-counts. That makes it configuration,
@@ -123,13 +86,6 @@ export async function runSync(env: SyncEnv, asOf: string = utcToday()): Promise<
         if (!(e instanceof PlaidError) || e.status >= 500) summary.errors.push(`liabilities ${item.item_id}: ${String(e)}`)
       }
     }
-  }
-
-  await upsertTransactions(supabase, incoming, accountsById, rules, brokerageMatch)
-
-  if (removedIds.length) {
-    await supabase.from('finance_transactions').delete().in('id', removedIds)
-    summary.removed += removedIds.length
   }
 
   if (balanceRows.length) {
@@ -183,79 +139,6 @@ async function ensureAccount(
   }
   await supabase.from('finance_accounts').upsert(row, { onConflict: 'account_id' })
   accountsById.set(pa.account_id, row)
-}
-
-async function upsertTransactions(
-  supabase: SupabaseClient,
-  incoming: PlaidTransaction[],
-  accountsById: Map<string, FinanceAccount>,
-  rules: FinanceRule[],
-  brokerageMatch: string[]
-): Promise<void> {
-  if (!incoming.length) return
-  const ids = incoming.map((t) => t.transaction_id)
-  const { data: existingRows } = await supabase
-    .from('finance_transactions')
-    .select('id, category, notes, is_transfer, is_split, split_amount, savings_bucket, income_source, flagged_for_review, reviewed')
-    .in('id', ids)
-  const existing = new Map<string, any>()
-  for (const r of (existingRows ?? []) as any[]) existing.set(r.id, r)
-
-  const payload = incoming.map((t) => {
-    const prior = existing.get(t.transaction_id)
-    const base = {
-      id: t.transaction_id,
-      account_id: t.account_id,
-      date: t.date,
-      amount: signedAmount(t),
-      merchant_name: t.merchant_name,
-      name: t.name,
-      plaid_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
-      pending: t.pending,
-      source: 'plaid' as const,
-      updated_at: new Date().toISOString()
-    }
-    // Preserve the user's edits on rows they've already reviewed.
-    if (prior && prior.reviewed) {
-      return {
-        ...base,
-        category: prior.category,
-        notes: prior.notes,
-        is_transfer: prior.is_transfer,
-        is_split: prior.is_split,
-        split_amount: prior.split_amount,
-        savings_bucket: prior.savings_bucket,
-        income_source: prior.income_source,
-        flagged_for_review: prior.flagged_for_review,
-        reviewed: true
-      }
-    }
-    const c = classify(
-      {
-        name: t.name,
-        merchant_name: t.merchant_name,
-        amount: signedAmount(t),
-        pfc_primary: t.personal_finance_category?.primary,
-        pfc_detailed: t.personal_finance_category?.detailed
-      },
-      accountsById.get(t.account_id),
-      { rules, brokerageMatch }
-    )
-    return {
-      ...base,
-      category: c.category,
-      notes: c.notes,
-      is_transfer: c.is_transfer,
-      is_split: false,
-      split_amount: null,
-      savings_bucket: c.savings_bucket,
-      income_source: c.income_source,
-      flagged_for_review: c.flagged_for_review,
-      reviewed: c.reviewed
-    }
-  })
-
-  await supabase.from('finance_transactions').upsert(payload, { onConflict: 'id' })
 }
 
 async function snapshotNetWorth(

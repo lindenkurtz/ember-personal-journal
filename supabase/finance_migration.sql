@@ -12,6 +12,20 @@
 --     bypasses RLS entirely, so they never need policies.
 --   * `finance_plaid_items` holds access tokens and is deliberately given NO
 --     anon policy — it is server-only and must never be reachable from the SPA.
+--
+-- RETIRED (Sept 2026) — data is permanent, same rule as the deep_work_* columns.
+-- Transaction ingest, classification, screenshot import, the review queue,
+-- user rules, the monthly cash-flow / category panels and savings-rate tracking
+-- were all removed from the app. Their tables and columns stay here and keep
+-- every row they hold; nothing reads or writes them any more. Do not drop them,
+-- rewrite them, or repurpose the columns.
+--   * `finance_transactions`, `finance_rules` — retired wholesale.
+--   * `finance_plaid_items.transactions_cursor` — no longer read or advanced.
+--   * `finance_settings.brokerage_match`, `.cc_payment_payee` — classification
+--     config with no remaining consumer.
+-- Still live: finance_accounts, finance_balances, finance_net_worth_snapshots,
+-- finance_loan_balances, finance_settings (plaid_env, loan_servicer,
+-- last_full_sync_date), and finance_plaid_items itself.
 
 -- ---------------------------------------------------------------------------
 -- finance_plaid_items — one row per linked Plaid Item. SERVER-ONLY.
@@ -48,7 +62,7 @@ create table if not exists finance_accounts (
 alter table finance_accounts enable row level security;
 drop policy if exists "anon read accounts" on finance_accounts;
 create policy "anon read accounts"   on finance_accounts for select to anon using (true);
--- INSERT is needed for the client-created synthetic Apple Card (CSV) account.
+-- INSERT is retained for the retired client-created synthetic account rows.
 drop policy if exists "anon insert accounts" on finance_accounts;
 create policy "anon insert accounts" on finance_accounts for insert to anon with check (true);
 drop policy if exists "anon update accounts" on finance_accounts;

@@ -11,8 +11,8 @@ constraints that aren't obvious from reading the code. Setup instructions live i
 - **Daily journal** — sleep, gym, focused work, social, meal timing, confound
   flags, weekly-entered screen time. Morning and evening check-in flows, a
   dashboard, a history view, and a Claude-written patterns analysis.
-- **Finance dashboard** at `/finance` — Plaid sync, Apple Card/Cash import by
-  screenshot, transaction classification, net-worth snapshots.
+- **Net-worth tracker** at `/finance` — daily Plaid balance sync, loan
+  balances, and a net-worth snapshot charted over time.
 
 React + Vite SPA, Supabase persistence, deployed as a static site to Cloudflare
 Pages with Pages Functions in [functions/](functions/) and one separate
@@ -41,10 +41,10 @@ example, or a commit message:
   `*.template.md` files when the *structure* changes, never by pasting real data
   into them.
 - **Names of the user's financial institutions** — bank, brokerage, loan
-  servicer, card issuer. These are configuration, read from `finance_settings`
-  (`brokerage_match`, `loan_servicer`, `cc_payment_payee`). A payment network
-  the app has an actual code path for (Plaid, Venmo, Apple Card/Cash) is a
-  feature, not a disclosure — those are fine.
+  servicer, card issuer. The one the app still needs is configuration, read from
+  `finance_settings.loan_servicer`. A payment network the app has an actual code
+  path for is a feature, not a disclosure — that means Plaid, and only Plaid,
+  since the card/cash and peer-payment paths were retired.
 - **Balances, amounts, transactions, account or card numbers.**
 - **Identifying detail**: legal name beyond the existing git authorship, email,
   address, employer, school, coordinates, timezone as anything but a fallback
@@ -69,7 +69,7 @@ build` will not catch any of it.
 ```
 src/                  SPA (React, DOM types)
   lib/                one module per Supabase table + date/streak/prompt helpers
-  lib/finance/        SPA-side finance data access + screenshot extraction
+  lib/finance/        SPA-side finance data access
   components/         journal UI primitives
   components/finance/ finance-only components
   pages/              one file + one sibling .css per route
@@ -152,7 +152,18 @@ docs/FINANCE.md       finance setup + operations
   show as pending on the dashboard while the Worker suppresses the reminder.
   Evening (`gym_actual` + `day_quality`) does match.
 
-- **Finance: one sync, shared by two runtimes.** `runSync` in
+- **Finance is net-worth-only.** Transaction ingest, classification, screenshot
+  import, the review queue, user rules, the monthly cash-flow / category panels
+  and savings-rate tracking were all **retired Sept 2026**, unused. Same rule as
+  the `deep_work_*` columns: `finance_transactions` and `finance_rules` keep
+  every row, and nothing reads, writes, or types them — the `Category`,
+  `FinanceTransaction`, `FinanceRule` and `SavingsBucket` types are gone along
+  with `classify.ts` / `categories.ts`. `finance_plaid_items.transactions_cursor`
+  and `finance_settings.brokerage_match` / `.cc_payment_payee` are likewise
+  vestigial columns. Don't revive any of it to add a feature — a new one starts
+  from the current shape.
+
+- **One sync, shared by two runtimes.** `runSync` in
   [shared/finance/sync.ts](shared/finance/sync.ts) is called by both the manual
   "Sync now" Pages Function
   ([functions/api/plaid/sync.ts](functions/api/plaid/sync.ts)) and the daily cron
@@ -162,7 +173,9 @@ docs/FINANCE.md       finance setup + operations
   [tsconfig.app.json](tsconfig.app.json) so Plaid logic never enters the SPA
   bundle. Plaid is raw REST in
   [shared/finance/plaidApi.ts](shared/finance/plaidApi.ts) — **don't add the
-  `plaid` npm SDK**, it's axios/Node-only (same rule as `web-push`).
+  `plaid` npm SDK**, it's axios/Node-only (same rule as `web-push`). Link asks
+  for the `balance` product only now that transactions are gone; items linked
+  before that keep the scope they were created with.
   `finance_plaid_items` holds access tokens and has **no anon RLS policy** — it
   is server-only; never read it from the SPA. Everything else finance lives in
   [docs/FINANCE.md](docs/FINANCE.md).
@@ -308,11 +321,12 @@ docs/FINANCE.md       finance setup + operations
   Dashboard shows a per-day-dismissible banner when today falls in no period;
   dismissals live in `localStorage` (`ember:ctxDismissed`), never the DB.
 
-- **Finance amounts: inflow positive, outflow negative.** Plaid's convention is
-  the opposite — invert on ingest. **Savings rates** read off a per-transaction
-  `savings_bucket` (`short_term`/`long_term`/`retirement`) — the single source of
-  truth, so a transfer is counted exactly once regardless of which side is
-  connected.
+- **Net worth = included asset balances − loan balances.** `is_asset` and
+  `include_in_net_worth` on `finance_accounts` are the user's toggles and a sync
+  must never clobber them (the `ensureAccount` refresh branch). Liabilities come
+  from `finance_loan_balances`, keyed on `loan_servicer` — never from an account
+  row. `finance_balances` holds one row per account per sync day, which is what
+  makes the per-account history chart possible.
 
 ## Code conventions
 
@@ -419,8 +433,8 @@ an input, tokens from `theme.css` for every color. Finance-only components go in
 - Data and legend for the Patterns prompt:
   [src/lib/promptData.ts](src/lib/promptData.ts).
 - Prompt wording: `buildPrompt` in
-  [src/pages/Patterns.tsx](src/pages/Patterns.tsx), the extraction prompt in
-  [src/lib/finance/extract.ts](src/lib/finance/extract.ts).
+  [src/pages/Patterns.tsx](src/pages/Patterns.tsx). Finance no longer calls
+  Claude at all.
 - Requires `npm run pages:dev` to exercise — `npm run dev` has no `/api/*`.
 
 ### Change notification behavior
@@ -437,25 +451,17 @@ echo caught errors into the response body. If you touch a "done" rule, check the
 both the Worker's `Settings` interface + its select list and the SPA's
 `PushSettings` + `COLUMNS` in [src/lib/settings.ts](src/lib/settings.ts).
 
-### Add a finance category or classification rule
+### Touch the finance feature
 
-Categories are a closed union in
-[shared/finance/types.ts](shared/finance/types.ts) plus `CATEGORIES` /
-`CATEGORY_LABELS` in [shared/finance/categories.ts](shared/finance/categories.ts)
-and the Plaid mapping tables there. Classification logic is
-[shared/finance/classify.ts](shared/finance/classify.ts), data-driven off
-`finance_settings` — `cc_payment_payee`, plus `brokerage_match` (comma-separated
-substrings identifying the user's brokerage, threaded in through
-`ClassifyContext.brokerageMatch`) and `loan_servicer`. **No institution name
-belongs in this repo**: a new one is a `finance_settings` column with a null
-default that turns its branch off, never a string literal. `loan_servicer` is
-additionally the upsert key for `finance_loan_balances` and the net-worth rollup
-sums the latest balance per distinct servicer — so it must stay byte-stable, or
-old rows are stranded under the old name and counted on top of the new ones. A re-sync **never clobbers a transaction the
-user has `reviewed`** (the preserve branch in `upsertTransactions`), and account
-`include_in_net_worth` toggles are likewise preserved — keep both invariants.
-User-authored rules live in `finance_rules` and are created from the transaction
-editor, not in code.
+It is net-worth-only — see the Architecture note. `loan_servicer` in
+`finance_settings` is the display name **and** the upsert key for
+`finance_loan_balances`, and the net-worth rollup sums the latest balance per
+distinct servicer, so it must stay byte-stable or old rows are stranded under
+the old name and counted on top of the new ones. **No institution name belongs
+in this repo**: a new one is a `finance_settings` column with a null default that
+turns its branch off, never a string literal. Account `include_in_net_worth`
+toggles must survive a re-sync. Everything else is in
+[docs/FINANCE.md](docs/FINANCE.md).
 
 ### Change what the analysis bundle exports or how it's analyzed
 
@@ -567,9 +573,6 @@ references `worker/`, so run the root build for those as well.
 - **The weather snapshot is independent of push.** It runs once per local day
   whenever coords are set, even if no subscription exists or the morning push was
   smart-skipped. Don't fold it back into the send path.
-- **Apple Card's account id is `csv-apple-card` and its `source` is `'csv'`**
-  even though CSV import no longer exists (screenshots replaced it). Those are
-  frozen strings keeping existing rows joined — don't rename them.
 - **Run the export through `npm run export:analysis`, not `node
   scripts/export-analysis-bundle.mjs`.** The `--env-file=.env.local` flag lives in
   the npm script, so invoking the file directly exits on "Missing SUPABASE_URL"

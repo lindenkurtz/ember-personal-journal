@@ -9,8 +9,3 @@ export function money(n: number, opts: { cents?: boolean; signed?: boolean } = {
   if (opts.signed) return (n < 0 ? '−' : '+') + s
   return (n < 0 ? '−' : '') + s
 }
-
-export function percent(rate: number | null): string {
-  if (rate === null) return '—'
-  return `${Math.round(rate * 100)}%`
-}

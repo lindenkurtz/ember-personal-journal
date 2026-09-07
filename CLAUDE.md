@@ -424,7 +424,8 @@ questions array length, so it updates itself.
 
 Create `src/pages/Name.tsx` + `Name.css`, register it in
 [src/App.tsx](src/App.tsx) above the catch-all redirect, and link to it from the
-Dashboard header. Follow the prefill-and-degrade `useEffect` pattern.
+Dashboard header. Follow the prefill-and-degrade `useEffect` pattern. If the page
+holds unsaved input, add `useEffect(holdUpdates, [])` — see the SW gotchas.
 
 ### Add a Supabase table the SPA writes
 
@@ -574,9 +575,25 @@ references `worker/`, so run the root build for those as well.
 - **`skipWaiting()` + `clientsClaim()` in the SW are load-bearing.** iOS
   backgrounds the home-screen PWA instead of closing it, so without them a new
   deploy's SW sits "waiting" forever and the app is stuck on a stale bundle.
-  Combined with `registerType: 'autoUpdate'` and `registerSW({ immediate: true })`
-  in [src/main.tsx](src/main.tsx), the next navigation after a deploy refreshes —
-  don't add an in-app update prompt.
+  Combined with `registerType: 'autoUpdate'`, a new SW activates the moment it's
+  found and vite-plugin-pwa reloads the page — don't add an in-app update prompt.
+
+- **Finding the update is the hard half, and it needs an explicit resume check.**
+  `registerSW` checks for a new SW once, at page load. On iOS that load may
+  never happen again: the home-screen PWA is suspended and resumed, not closed
+  and reopened, so a deploy can go undiscovered for as long as the app stays
+  installed. [src/lib/swUpdate.ts](src/lib/swUpdate.ts) owns registration and
+  re-runs `registration.update()` on `visibilitychange` → visible, on `online`,
+  and hourly while foregrounded. Register the SW through
+  `registerServiceWorker()` there — never call `registerSW` directly again.
+
+- **A page holding unsaved input must call `holdUpdates()`.** An update reloads
+  the page with no warning, and every draft in this app is in-memory only
+  (Morning/Evening's `draft`, ScreenTime's `grid`, the Patterns stream) — a
+  resume mid-check-in would silently discard what was typed. `holdUpdates()`
+  suppresses checks and returns its release function, so `useEffect(holdUpdates,
+  [])` covers a page's lifetime; a deferred check runs on release, so nothing is
+  lost, only delayed. Any new page with unsaved state needs the same call.
 - **iOS push only works inside the home-screen-installed PWA**, not Safari tabs.
   `pushSupport()` in [src/lib/push.ts](src/lib/push.ts) gates the Settings toggle
   on `display-mode: standalone` || `navigator.standalone` for exactly this

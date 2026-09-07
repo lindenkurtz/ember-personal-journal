@@ -24,6 +24,7 @@ import {
   SOCIAL_LEVEL_START
 } from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
+import { holdUpdates } from '../lib/swUpdate'
 import '../pages/Morning.css' // share the journal layout/buttons
 
 const GYM_OPTIONS = [
@@ -134,6 +135,9 @@ export default function Evening() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // The draft lives in memory only, and an auto-update reload would discard it.
+  useEffect(holdUpdates, [])
 
   // Seed from the target day's existing row so the user can review/edit rather
   // than re-enter. For makeups, this pulls yesterday's morning intent forward.

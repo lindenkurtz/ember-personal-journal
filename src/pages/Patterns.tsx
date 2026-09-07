@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getRange, Entry } from '../lib/entries'
 import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
@@ -6,6 +6,7 @@ import { listContextPeriods, ContextPeriod } from '../lib/contextPeriods'
 import { buildCompactRows, contextHeader, FIELD_LEGEND, SPARSE_NOTE } from '../lib/promptData'
 import { lastNDays, todayKey } from '../lib/date'
 import { streamClaude } from '../lib/claude'
+import { holdUpdates } from '../lib/swUpdate'
 import './Patterns.css'
 
 const SYSTEM_PROMPT = [
@@ -27,6 +28,9 @@ export default function Patterns() {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [count, setCount] = useState<number | null>(null)
+
+  // A reload mid-stream would drop the analysis; it isn't stored anywhere.
+  useEffect(() => (running ? holdUpdates() : undefined), [running])
 
   async function analyze() {
     setRunning(true)

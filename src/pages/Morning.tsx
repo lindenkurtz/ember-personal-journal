@@ -9,6 +9,7 @@ import TimeInput from '../components/TimeInput'
 import { upsertEntry, getEntry, GymChoice } from '../lib/entries'
 import { getSettings, updateSettings } from '../lib/settings'
 import { todayKey, prettyDay } from '../lib/date'
+import { holdUpdates } from '../lib/swUpdate'
 import './Morning.css'
 
 const GYM_OPTIONS = [
@@ -37,6 +38,9 @@ export default function Morning() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // The draft lives in memory only, and an auto-update reload would discard it.
+  useEffect(holdUpdates, [])
 
   // Prefill from today's row so re-opening a completed check-in lets you edit,
   // not re-enter from scratch.

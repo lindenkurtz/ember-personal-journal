@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { getScreenTimeRange, upsertScreenTimeDays, formatDuration, ScreenTimeRow } from '../lib/screenTime'
 import { screenTimeWeekStart, addDaysKey } from '../lib/date'
+import { holdUpdates } from '../lib/swUpdate'
 import DurationWheelPicker from '../components/DurationWheelPicker'
 import './ScreenTime.css'
 
@@ -47,6 +48,9 @@ export default function ScreenTime() {
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // The draft lives in memory only, and an auto-update reload would discard it.
+  useEffect(holdUpdates, [])
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysKey(weekStart, i)),

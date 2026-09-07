@@ -141,8 +141,10 @@ docs/FINANCE.md       finance setup + operations
   Three slots: morning, evening, and `weekly` (screen-time reminder for the
   just-completed Sun–Sat week — fires on Sunday, then re-fires once a day as a
   differently-worded make-up nag while the week stays unlogged, but **never on
-  Saturday**, the day the target week rolls over to the not-yet-loggable current
-  week; mirrors `screenTimeWeekStart`).
+  Saturday**, kept as a quiet day because the target rolls over the next
+  morning. That skip is a preference, not a correctness guard: `dueWeekly`'s
+  week math resolves Saturday to the same completed week as Sun–Fri, exactly
+  like `screenTimeWeekStart`.)
 
   The Worker's `dueMorning`/`dueEvening` "done" rules must track
   `isMorningDone`/`isEveningDone` in
@@ -298,8 +300,12 @@ docs/FINANCE.md       finance setup + operations
 - **Screen time is a separate weekly-entered table.** Daily granularity in
   `screen_time`, entered in batches at `/screentime` for the most recently
   completed Sunday–Saturday week (`screenTimeWeekStart`) — matching iOS Screen
-  Time's own weekly reset, so on a Sunday entry night every day shown is already
-  done. All-blank days are never written; sparse weeks must stay sparse. "Week
+  Time's own weekly reset, so every day shown is always already done. **The week
+  containing today is never the target**, on any weekday: it isn't complete until
+  Saturday is over, so the target rolls over on Sunday. Saturday is not a special
+  case — treating its in-progress week as loggable made the Dashboard nag for a
+  week that couldn't exist yet and let a half-finished Saturday count as
+  "logged", suppressing Sunday's real prompt. All-blank days are never written; sparse weeks must stay sparse. "Week
   logged" everywhere (Dashboard nag card, Worker smart-skip) means **≥1 row
   exists for that Sun–Sat week**, so intentionally partial weeks never nag
   forever. Phone and iPad minutes are deliberately separate columns — merging

@@ -39,13 +39,15 @@ export function addDaysKey(key: string, n: number): string {
 /**
  * Sunday key of the screen-time entry week: the most recently completed
  * Sunday–Saturday week, matching iOS Screen Time's own Sun–Sat weekly
- * report reset. The Sun–Sat week containing today is only complete once
- * today is Saturday; every other day (including Sunday, when entry
- * happens) falls back to the prior week, which is fully done.
+ * report reset. The week containing today is never the target — it isn't
+ * complete until Saturday is *over* — so every weekday resolves to the
+ * previous Sunday and the target rolls over on Sunday, the day entry is
+ * prompted. Saturday is not a special case: treating the in-progress week
+ * as loggable there made the Dashboard nag for a week that could not yet
+ * exist, and offered /screentime a form whose last day hadn't happened.
  */
 export function screenTimeWeekStart(today: Date = new Date()): string {
-  const wk = dayKey(startOfWeek(today, { weekStartsOn: 0 }))
-  return today.getDay() === 6 ? wk : addDaysKey(wk, -7)
+  return addDaysKey(dayKey(startOfWeek(today, { weekStartsOn: 0 })), -7)
 }
 
 /** Sunday-of-the-week ISO date key, matching the screen-time Sun–Sat entry cadence. */

@@ -183,10 +183,12 @@ const WEEKDAY_INDEX: Record<string, number> = {
 
 // Weekly screen-time reminder for the just-completed Sun..Sat week. Fires first
 // on Sunday at weekly_time (the on-time prompt) and re-fires once each following
-// day the week is still unlogged (a make-up nag) — Saturday is excluded because
-// that's the day the target week rolls over to the not-yet-loggable current
-// week (mirrors screenTimeWeekStart in the SPA). Smart-skips when any day of the
-// target week already has a row; like the daily slots, a skip does NOT write
+// day the week is still unlogged (a make-up nag). Saturday is excluded as a
+// deliberate quiet day: the target rolls over the next morning, so a Saturday
+// nag would be immediately superseded. It is NOT a correctness guard — the
+// weekStart formula below resolves Saturday to the same completed week as
+// Sun–Fri, matching screenTimeWeekStart in the SPA. Smart-skips when any day of
+// the target week already has a row; like the daily slots, a skip does NOT write
 // last_weekly_sent, and the per-day dedupe on last_weekly_sent caps it at once a
 // day.
 async function dueWeekly(

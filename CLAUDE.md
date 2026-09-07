@@ -586,6 +586,10 @@ references `worker/`, so run the root build for those as well.
   re-runs `registration.update()` on `visibilitychange` → visible, on `online`,
   and hourly while foregrounded. Register the SW through
   `registerServiceWorker()` there — never call `registerSW` directly again.
+  `resetAppCaches()` is the manual escape hatch behind Settings → App cache; it
+  drops every Workbox cache but deliberately leaves the registration in place,
+  because `getSubscription` reads the push subscription off the registration and
+  unregistering would kill reminders without the toggle ever showing it.
 
 - **A page holding unsaved input must call `holdUpdates()`.** An update reloads
   the page with no warning, and every draft in this app is in-memory only

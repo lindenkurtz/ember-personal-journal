@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSettings, updateSettings, setRestBudget, PushSettings } from '../lib/settings'
 import { getSubscription, pushSupport, subscribe, unsubscribe } from '../lib/push'
+import { resetAppCaches } from '../lib/swUpdate'
 import './Settings.css'
 
 type Status = 'idle' | 'saving' | 'subscribing' | 'unsubscribing'
@@ -11,6 +12,7 @@ export default function Settings() {
   const [subscribed, setSubscribed] = useState<boolean>(false)
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
   const support = pushSupport()
 
   useEffect(() => {
@@ -44,6 +46,19 @@ export default function Settings() {
       setError(e instanceof Error ? e.message : 'Something went wrong.')
     } finally {
       setStatus('idle')
+    }
+  }
+
+  async function resetCaches() {
+    setResetting(true)
+    setError(null)
+    try {
+      // Resolves into a reload, so `resetting` is only cleared on failure.
+      await resetAppCaches()
+    } catch (e) {
+      console.error('[settings] reset', e)
+      setError("Couldn't clear the cache — try again.")
+      setResetting(false)
     }
   }
 
@@ -188,6 +203,28 @@ export default function Settings() {
         onLabel={(v) => patchSettings({ location_name: v || null })}
         onCoords={(lat, lon) => patchSettings({ latitude: lat, longitude: lon })}
       />
+
+      <section className="settings__card">
+        <div className="settings__row">
+          <div className="settings__rowText">
+            <h2 className="settings__rowTitle">App cache</h2>
+            <p className="settings__rowHint">
+              Still on an old version after a deploy? This clears the cached app
+              and reloads from the server. Entries live in the database, so
+              nothing is lost and reminders stay on.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="settings__reset"
+          onClick={resetCaches}
+          disabled={resetting}
+        >
+          {resetting ? 'Clearing…' : 'Reset app data'}
+        </button>
+      </section>
 
       {error && <p className="settings__error">{error}</p>}
     </main>

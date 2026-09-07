@@ -214,6 +214,30 @@
   opacity: 0.55;
 }
 
+.settings__reset {
+  appearance: none;
+  align-self: flex-start;
+  background: transparent;
+  color: var(--terracotta);
+  border: 1px solid var(--terracotta-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.settings__reset:hover:not(:disabled) {
+  border-color: var(--terracotta);
+  background: var(--terracotta-soft);
+}
+
+.settings__reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .settings__tz {
   margin: 0;
   color: var(--muted);

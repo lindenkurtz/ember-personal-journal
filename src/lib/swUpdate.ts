@@ -64,3 +64,23 @@ export function registerServiceWorker() {
     if (document.visibilityState === 'visible') check()
   }, FOREGROUND_RECHECK_MS)
 }
+
+/**
+ * Escape hatch for a PWA wedged on an old bundle: drop every Workbox cache,
+ * force an update check, and reload onto whatever is currently deployed.
+ *
+ * The registration itself is deliberately left alone. Unregistering would take
+ * the push subscription with it — `getSubscription` reads it off the
+ * registration — silently killing reminders until the toggle is flipped again.
+ *
+ * Leaves the precache empty until the next deploy installs a new worker, so the
+ * app is online-only until then. That's the cheaper half of the trade.
+ */
+export async function resetAppCaches(): Promise<void> {
+  if ('caches' in window) {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((k) => caches.delete(k)))
+  }
+  await registration?.update().catch(() => {})
+  location.reload()
+}

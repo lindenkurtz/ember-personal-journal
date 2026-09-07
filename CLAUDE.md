@@ -328,6 +328,17 @@ docs/FINANCE.md       finance setup + operations
   row. `finance_balances` holds one row per account per sync day, which is what
   makes the per-account history chart possible.
 
+- **The Dashboard's per-semester loan card is driven by DB config, not a
+  calendar in code.** `semesterLoanDue` in
+  [src/lib/finance/loans.ts](src/lib/finance/loans.ts) fires when the most recent
+  `finance_settings.semester_starts` date has passed and no
+  `finance_loan_balances` row exists on or after it; writing a balance clears it.
+  Only the current term can be outstanding, so a skipped one never sticks, and
+  the list running out is what ends the reminders. **An academic calendar
+  identifies a school** — the dates are a `jsonb` column with a null default that
+  turns the card off, never constants (the same rule that keeps institution names
+  in `finance_settings`).
+
 ## Code conventions
 
 - **Styling: hand-rolled CSS, no framework.** Each component and page has a
@@ -460,8 +471,10 @@ distinct servicer, so it must stay byte-stable or old rows are stranded under
 the old name and counted on top of the new ones. **No institution name belongs
 in this repo**: a new one is a `finance_settings` column with a null default that
 turns its branch off, never a string literal. Account `include_in_net_worth`
-toggles must survive a re-sync. Everything else is in
-[docs/FINANCE.md](docs/FINANCE.md).
+toggles must survive a re-sync. The Dashboard reads finance only for the
+per-semester loan card — via `getFinanceSettings` + `getLatestLoan`, both
+`.catch()`-guarded so a finance outage hides the card instead of nagging falsely.
+Everything else is in [docs/FINANCE.md](docs/FINANCE.md).
 
 ### Change what the analysis bundle exports or how it's analyzed
 

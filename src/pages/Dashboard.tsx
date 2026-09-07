@@ -6,6 +6,9 @@ import { gymStreak, restDaysLeft, bestGymStreak } from '../lib/streaks'
 import { getSettings, PushSettings } from '../lib/settings'
 import { getScreenTimeRange, getAllScreenTime, phoneTimeTrend, ScreenTimeRow, PhoneTimeTrend } from '../lib/screenTime'
 import { listContextPeriods, periodForDate, ContextPeriod } from '../lib/contextPeriods'
+import { getFinanceSettings } from '../lib/finance/settings'
+import { getLatestLoan, semesterLoanDue } from '../lib/finance/loans'
+import type { FinanceSettings, LoanBalance } from '../../shared/finance/types'
 import { prettyDay, todayKey, dayKey, screenTimeWeekStart, addDaysKey } from '../lib/date'
 import StatCard from '../components/StatCard'
 import CheckInCard from '../components/CheckInCard'
@@ -29,6 +32,10 @@ export default function Dashboard() {
   const [periods, setPeriods] = useState<ContextPeriod[] | null>(null)
   const [screenWeek, setScreenWeek] = useState<ScreenTimeRow[] | null>(null)
   const [screenTrend, setScreenTrend] = useState<PhoneTimeTrend | null>(null)
+  // Loan reminder inputs. `undefined` is the not-loaded/failed state here
+  // because `null` already means "no loan row yet" — a real, naggable value.
+  const [financeCfg, setFinanceCfg] = useState<FinanceSettings | null>(null)
+  const [loan, setLoan] = useState<LoanBalance | null | undefined>(undefined)
   const [showCtxEditor, setShowCtxEditor] = useState(false)
   const [ctxDismissed, setCtxDismissed] = useState(
     () => localStorage.getItem(CTX_DISMISS_KEY) === todayKey()
@@ -50,9 +57,11 @@ export default function Dashboard() {
       getAllEntries(),
       listContextPeriods().catch(() => null),
       getScreenTimeRange(wk, addDaysKey(wk, 6)).catch(() => null),
-      getAllScreenTime().catch(() => null)
+      getAllScreenTime().catch(() => null),
+      getFinanceSettings().catch(() => null),
+      getLatestLoan().catch(() => undefined)
     ])
-      .then(([range, t, y, s, all, ps, st, allScreen]) => {
+      .then(([range, t, y, s, all, ps, st, allScreen, fin, ln]) => {
         if (cancelled) return
         setEntries(range)
         setAllEntries(all)
@@ -62,6 +71,8 @@ export default function Dashboard() {
         setPeriods(ps)
         setScreenWeek(st)
         setScreenTrend(allScreen ? phoneTimeTrend(allScreen) : null)
+        setFinanceCfg(fin)
+        setLoan(ln)
       })
       .catch((err) => console.error('[dashboard]', err))
       .finally(() => !cancelled && setLoading(false))
@@ -85,6 +96,12 @@ export default function Dashboard() {
   // day is saved the week counts as logged — partial weeks are intentional and
   // must never nag forever.
   const screenTimeMissing = screenWeek !== null && screenWeek.length === 0
+  // Per-semester loan nag. Hidden outright when either fetch failed, so a
+  // finance outage never claims the balance is stale.
+  const loanDue = loan === undefined || !financeCfg
+    ? null
+    : semesterLoanDue(financeCfg.semester_starts, loan, todayKey())
+
   const noContextToday =
     !loading && periods !== null && !periodForDate(periods, todayKey()) && !ctxDismissed
 
@@ -151,6 +168,15 @@ export default function Dashboard() {
               variant={eveningDone ? 'default' : 'cta'}
               to="/evening"
             />
+            {loanDue && (
+              <CheckInCard
+                title="Loan balance — new semester"
+                summary={`Term started ${format(parseISO(loanDue), 'MMM d')}. Update the balance after this semester's disbursement.`}
+                status="missed"
+                variant="warn"
+                to="/finance"
+              />
+            )}
             {screenTimeMissing && (
               <CheckInCard
                 title="Screen time — last week"

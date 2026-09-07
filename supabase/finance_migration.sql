@@ -181,6 +181,14 @@ create table if not exists finance_settings (
   -- tracked, and the Plaid liabilities write is skipped rather than inventing a
   -- name that would not match existing rows.
   loan_servicer text,
+  -- Semester start dates (JSON array of 'YYYY-MM-DD' strings, any order) that
+  -- drive the Dashboard's "update your loan balance" card: one nag per term,
+  -- clearing as soon as a finance_loan_balances row is written on or after that
+  -- date. Null or [] = the card never appears. This is deliberately data and
+  -- not a constant — an academic calendar identifies a school, and this repo is
+  -- public. The list also encodes when the reminders stop: after the last entry
+  -- is satisfied there is nothing left to nag about.
+  semester_starts jsonb,
   last_full_sync_date date,
   constraint finance_settings_singleton check (id = 1)
 );
@@ -189,6 +197,7 @@ insert into finance_settings (id) values (1) on conflict (id) do nothing;
 -- Backfill for databases created before these columns existed. Idempotent.
 alter table finance_settings add column if not exists brokerage_match text;
 alter table finance_settings add column if not exists loan_servicer text;
+alter table finance_settings add column if not exists semester_starts jsonb;
 
 -- Adopt the servicer name already present in the data, so upgrading doesn't
 -- strand existing loan rows under a name the app no longer knows.

@@ -51,6 +51,10 @@ export interface FinanceSettings {
   // Display name of the loan servicer behind finance_loan_balances. Null = no
   // loan tracked. Doubles as the write key, so changing it strands existing rows.
   loan_servicer: string | null
+  // Semester start dates ('YYYY-MM-DD') driving the Dashboard's per-term loan
+  // reminder. Null/empty = no reminder. Config, not a constant: an academic
+  // calendar identifies a school and this repo is public.
+  semester_starts: string[] | null
   last_full_sync_date: string | null
 }
 

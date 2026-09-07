@@ -1,12 +1,13 @@
 import { supabase } from '../supabase'
 import type { FinanceSettings } from '../../../shared/finance/types'
 
-const COLUMNS = 'id, plaid_env, loan_servicer, last_full_sync_date'
+const COLUMNS = 'id, plaid_env, loan_servicer, semester_starts, last_full_sync_date'
 
 const DEFAULTS: FinanceSettings = {
   id: 1,
   plaid_env: 'sandbox',
   loan_servicer: null,
+  semester_starts: null,
   last_full_sync_date: null
 }
 

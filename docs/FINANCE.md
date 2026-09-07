@@ -84,6 +84,7 @@ repo is public. The one place the app still needs a name, it reads from
 | Column | What to put there |
 | --- | --- |
 | `loan_servicer` | Display name for your loan, e.g. on `/finance` and as the write key for `finance_loan_balances`. Null skips the Plaid liabilities write entirely. |
+| `semester_starts` | JSON array of `YYYY-MM-DD` term start dates driving the Dashboard loan reminder — see below. Null or `[]` turns the card off. |
 
 `brokerage_match` and `cc_payment_payee` are still columns on that table but are
 classification-era leftovers — nothing reads them. Leave them as they are.
@@ -93,6 +94,36 @@ rollup sums the latest balance per distinct servicer — so change it and the ol
 rows are stranded under the old name and counted on top of the new ones. The
 migration seeds it from your existing loan data for exactly this reason; set it
 once and leave it.
+
+## Per-semester loan reminder
+
+The Dashboard shows a "Loan balance — new semester" card once a term has begun
+and no `finance_loan_balances` row has been written on or after that term's start
+date. Tapping it goes to `/finance`, where **Set manually** records the new
+balance — which clears the card until the next term.
+
+Only the *current* term can be outstanding. A term you skipped stops nagging
+once the next one starts, so the card can never pile up or get stuck.
+
+The dates live in `finance_settings.semester_starts`, never in code — an academic
+calendar identifies a school and this repo is public. Set them from your
+registrar's published calendar:
+
+```sql
+update finance_settings
+   set semester_starts = '["YYYY-MM-DD", "YYYY-MM-DD"]'::jsonb
+ where id = 1;
+```
+
+The list also decides when reminders **stop**: put your last term in it and
+nothing nags after that one is satisfied. Generic mid-August / mid-January dates
+work fine if you don't want to track your registrar exactly — the card is a nudge,
+not a deadline.
+
+**If Plaid syncs your loan**, it writes a `finance_loan_balances` row on every
+sync, which satisfies the check and the card never appears. That is intended —
+the balance really is current — but it means this card is only useful when the
+servicer isn't reachable through Plaid Liabilities and you enter balances by hand.
 
 ## Testing (Sandbox)
 

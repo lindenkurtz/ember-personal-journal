@@ -1,50 +1,9 @@
-.patterns {
-  max-width: 680px;
-  margin: 0 auto;
-  padding:
-    max(44px, calc(env(safe-area-inset-top) + 16px))
-    max(20px, env(safe-area-inset-right))
-    max(56px, env(safe-area-inset-bottom))
-    max(20px, env(safe-area-inset-left));
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.patterns__header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.patterns__back {
-  color: var(--muted);
-  font-size: 13px;
-  text-decoration: none;
-  align-self: flex-start;
-  margin-bottom: 4px;
-  transition: color 0.2s var(--ease);
-}
-
-.patterns__back:hover {
-  color: var(--amber);
-}
-
-.patterns__title {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-
-.patterns__cta {
-  display: flex;
-  flex-direction: column;
+/* A card whose whole content is one call to action: centred and roomier than
+ * the default. Doubled-up selector on purpose — see the `.card` note in
+ * global.css. */
+.card.patterns__cta {
   gap: 12px;
   padding: 28px 20px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
   align-items: center;
   text-align: center;
 }
@@ -86,11 +45,18 @@
   margin: 0;
 }
 
+/* Deliberately not a `.card`: this is prose in normal block flow, and the
+ * streaming caret is an inline span that a flex column would drop onto its own
+ * line. Softer corners and a lift too — it's the page's one content surface,
+ * with nothing beside it to stay consistent with. */
 .patterns__reading {
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
-  padding: 28px 24px;
+  /* Generous side padding rather than a narrower card: it holds the prose to
+   * ~75 characters on the shared 720px page while the card itself still lines
+   * up with the header. Narrow screens can't spare it — see the media query. */
+  padding: 28px 40px;
   font-size: 16px;
   line-height: 1.65;
   color: var(--text);
@@ -132,4 +98,12 @@
 
 .patterns__ghost:hover {
   background: var(--amber-soft);
+}
+
+/* Below the 720px page width the side padding is coming out of the text
+ * itself, not out of slack. */
+@media (max-width: 600px) {
+  .patterns__reading {
+    padding: 24px 20px;
+  }
 }

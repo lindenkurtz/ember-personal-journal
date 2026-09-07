@@ -51,8 +51,8 @@ type SocialLevelKey = (typeof SOCIAL_LEVEL_OPTIONS)[number]['value']
 // Persistent (not a tooltip), same as FOCUSED_DEFINITION: the boundaries have to
 // mean the same thing in month six as they did in month one.
 const SOCIAL_LEVEL_DEFINITION =
-  'None · Passing = roommates around, someone in class ' +
-  '· A real hang = deliberate time with someone · Most of the day.'
+  'None | Passing = roommates around, someone in class ' +
+  '| A real hang = deliberate time with someone | Most of the day.'
 
 const FOCUSED_OPTIONS = [
   { value: 'none', label: 'None' },
@@ -68,9 +68,8 @@ const FOCUSED_OPTIONS = [
 // felt — otherwise this becomes a second energy rating and tracks day_quality by
 // construction.
 const FOCUSED_DEFINITION =
-  "Self-directed and hard enough you couldn't have done it on autopilot. " +
-  'Problem sets, studying, research, building something at the edge of your ability. ' +
-  'Not lecture, not email, not comfortable execution.'
+  "Self-directed, and hard enough you couldn't do it on autopilot. " +
+  'Not lecture, email, or comfortable execution.'
 
 // Shown inside the Sick chip rather than as its own step or a block below the
 // list: a normal day should still cost one tap, and keeping the choice within the
@@ -83,16 +82,22 @@ type SickLevelKey = (typeof SICK_LEVEL_OPTIONS)[number]['value']
 
 // Persistent, same reason as FOCUSED_DEFINITION: the boundary has to mean the same
 // thing in month six as it did in month one.
-const SICK_LEVEL_DEFINITION =
-  'Light = off, but the day still worked · Major = the day was lost to it.'
+const SICK_LEVEL_DEFINITION = 'Light = day still worked | Major = day lost to it.'
 
 const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
   { value: 'sick', label: CONFOUND_LABELS.sick, hint: SICK_LEVEL_DEFINITION },
-  { value: 'alcohol', label: CONFOUND_LABELS.alcohol },
+  {
+    value: 'alcohol',
+    label: CONFOUND_LABELS.alcohol,
+    // Deliberately generic. The flag is broader than its name — it marks a
+    // chemically altered day, not drinking — but this repo is public, so the
+    // specifics live in analysis/CONTEXT.md and never in a tracked file.
+    hint: 'Any recreational substance, not only alcohol.'
+  },
   {
     value: 'slept_away',
     label: CONFOUND_LABELS.slept_away,
-    hint: 'Last night, in any bed but your own — including all nights of a trip, not just the first.'
+    hint: 'Last night, any bed but your own — every night of a trip.'
   },
   { value: 'travel_day', label: CONFOUND_LABELS.travel_day, hint: '3+ hours in transit today.' },
   { value: 'caffeine_late', label: CONFOUND_LABELS.caffeine_late, hint: 'Caffeine after ~2pm.' },

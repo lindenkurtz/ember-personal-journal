@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { getRange, Entry } from '../lib/entries'
 import { getScreenTimeRange, ScreenTimeRow } from '../lib/screenTime'
 import { listContextPeriods, ContextPeriod } from '../lib/contextPeriods'
@@ -7,6 +6,7 @@ import { buildCompactRows, contextHeader, FIELD_LEGEND, SPARSE_NOTE } from '../l
 import { lastNDays, todayKey } from '../lib/date'
 import { streamClaude } from '../lib/claude'
 import { holdUpdates } from '../lib/swUpdate'
+import PageHeader from '../components/PageHeader'
 import './Patterns.css'
 
 const SYSTEM_PROMPT = [
@@ -67,15 +67,11 @@ export default function Patterns() {
   }
 
   return (
-    <main className="patterns">
-      <header className="patterns__header">
-        <Link to="/dashboard" className="patterns__back">← back</Link>
-        <h1 className="patterns__title">Patterns</h1>
-        <p className="muted">An honest read on the last 30 days.</p>
-      </header>
+    <main className="page patterns">
+      <PageHeader title="Patterns" subtitle="An honest read on the last 30 days." />
 
       {!text && !running && (
-        <div className="patterns__cta">
+        <div className="card patterns__cta">
           <button className="patterns__primary" onClick={analyze} disabled={running}>
             Analyze the last 30 days
           </button>

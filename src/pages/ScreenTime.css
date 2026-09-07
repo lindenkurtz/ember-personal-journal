@@ -1,33 +1,14 @@
-.st {
+/* The entry grid is a fixed four-column table, so stretching it to the full
+ * page width turns three-digit inputs into slabs. Cap the content column
+ * rather than the page, so the header still lines up with every other route.
+ * Left-aligned, not centred, so it shares the header's left edge. */
+.st__weekNav,
+.st__hint,
+.st__grid,
+.st__error,
+.st__save {
+  width: 100%;
   max-width: 560px;
-  margin: 0 auto;
-  padding:
-    max(44px, calc(env(safe-area-inset-top) + 16px))
-    max(20px, env(safe-area-inset-right))
-    max(56px, env(safe-area-inset-bottom))
-    max(20px, env(safe-area-inset-left));
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.st__header {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-}
-
-.st__back {
-  color: var(--amber);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.st__title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
 }
 
 .st__weekNav {
@@ -69,13 +50,11 @@
   font-weight: 500;
 }
 
-.st__grid {
-  display: flex;
-  flex-direction: column;
+/* Tighter than a default card on both axes: it's a dense entry table, not a
+ * section of prose. Doubled-up selector on purpose — see the `.card` note in
+ * global.css. */
+.card.st__grid {
   gap: 8px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
   padding: 14px;
 }
 

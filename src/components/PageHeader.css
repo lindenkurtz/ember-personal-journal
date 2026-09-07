@@ -1,0 +1,55 @@
+/* Shared top-of-page header. Every route outside the check-in flows uses this,
+ * so the title block and the Home pill can't drift apart page to page. */
+.pagehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pagehead__text {
+  min-width: 0;
+}
+
+.pagehead__eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pagehead__title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  /* Titles that are figures rather than words (Finance) shouldn't jitter as
+   * the digits change. */
+  font-variant-numeric: tabular-nums;
+}
+
+.pagehead__eyebrow + .pagehead__title {
+  margin-top: 4px;
+}
+
+.pagehead__subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pagehead__home {
+  color: var(--amber);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--amber-soft);
+  transition: background 0.2s var(--ease);
+  white-space: nowrap;
+}
+
+.pagehead__home:hover {
+  background: var(--amber-soft);
+}

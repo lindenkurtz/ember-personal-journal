@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import type { FinanceAccount, FinanceBalance, FinanceSettings, LoanBalance, NetWorthSnapshot } from '../../shared/finance/types'
 import { getAccounts, updateAccount } from '../lib/finance/accounts'
 import { getLatestBalances, getBalanceHistory, getNetWorthSnapshots } from '../lib/finance/balances'
@@ -7,6 +6,7 @@ import { getFinanceSettings } from '../lib/finance/settings'
 import { getLatestLoan, setManualLoan } from '../lib/finance/loans'
 import { runPlaidSync } from '../lib/finance/plaid'
 import { money } from '../lib/finance/format'
+import PageHeader from '../components/PageHeader'
 import PlaidLinkButton from '../components/finance/PlaidLinkButton'
 import NetWorthChart from '../components/finance/NetWorthChart'
 import './Finance.css'
@@ -87,18 +87,17 @@ export default function Finance() {
   }
 
   return (
-    <main className="finance">
-      <header className="finance__header">
-        <div>
-          <p className="finance__eyebrow">Finance</p>
-          <h1 className="finance__title">{latestSnapshot ? money(latestSnapshot.net_worth) : '—'}</h1>
-          <p className="finance__subtitle">
+    <main className="page finance">
+      <PageHeader
+        eyebrow="Finance"
+        title={latestSnapshot ? money(latestSnapshot.net_worth) : '—'}
+        subtitle={
+          <>
             net worth
             {latestSnapshot && <> · {money(latestSnapshot.assets_total)} assets − {money(latestSnapshot.liabilities_total)} debt</>}
-          </p>
-        </div>
-        <Link to="/" className="finance__back">Home</Link>
-      </header>
+          </>
+        }
+      />
 
       <section className="finance__bar">
         <button className="finance__btn" onClick={handleSync} disabled={syncing}>
@@ -112,18 +111,18 @@ export default function Finance() {
       {loading ? (
         <p className="finance__empty" style={{ textAlign: 'center', padding: '40px 0' }}>Loading…</p>
       ) : accounts.length === 0 ? (
-        <section className="dash__card">
+        <section className="card">
           <p className="finance__empty">No accounts yet. Connect a bank with Plaid to start tracking net worth.</p>
         </section>
       ) : (
         <>
-          <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Net worth</h2><span className="muted">balance over time</span></div>
+          <section className="card">
+            <div className="card__header"><h2>Net worth</h2><span className="muted">balance over time</span></div>
             <NetWorthChart snapshots={snapshots} accounts={accounts} balances={balanceHistory} />
           </section>
 
-          <section className="dash__card">
-            <div className="dash__cardHeader"><h2>Accounts</h2><span className="muted">tap to toggle net worth</span></div>
+          <section className="card">
+            <div className="card__header"><h2>Accounts</h2><span className="muted">tap to toggle net worth</span></div>
             <div className="finance__accts">
               {accounts.map((a) => {
                 const bal = balances.get(a.account_id)

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { getScreenTimeRange, upsertScreenTimeDays, formatDuration, ScreenTimeRow } from '../lib/screenTime'
 import { screenTimeWeekStart, addDaysKey } from '../lib/date'
 import { holdUpdates } from '../lib/swUpdate'
 import DurationWheelPicker from '../components/DurationWheelPicker'
+import PageHeader from '../components/PageHeader'
 import './ScreenTime.css'
 
 type CellKey = 'phone' | 'pickups' | 'ipad'
@@ -125,11 +125,8 @@ export default function ScreenTime() {
   const weekLabel = `${format(parseISO(weekStart), 'MMM d')} – ${format(parseISO(addDaysKey(weekStart, 6)), 'MMM d')}`
 
   return (
-    <main className="st">
-      <header className="st__header">
-        <Link to="/" className="st__back">← Today</Link>
-        <h1 className="st__title">Screen time</h1>
-      </header>
+    <main className="page st">
+      <PageHeader title="Screen time" subtitle="Phone and iPad minutes, a week at a time." />
 
       <div className="st__weekNav">
         <button
@@ -157,7 +154,7 @@ export default function ScreenTime() {
         unknown days blank — partial weeks are fine.
       </p>
 
-      <div className="st__grid">
+      <div className="card st__grid">
         <div className="st__gridRow st__gridRow--head">
           <span className="st__day" />
           {COLS.map((c) => (

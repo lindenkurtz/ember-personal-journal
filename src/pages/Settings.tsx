@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { getSettings, updateSettings, setRestBudget, PushSettings } from '../lib/settings'
 import { getSubscription, pushSupport, subscribe, unsubscribe } from '../lib/push'
 import { resetAppCaches } from '../lib/swUpdate'
+import PageHeader from '../components/PageHeader'
 import './Settings.css'
 
 type Status = 'idle' | 'saving' | 'subscribing' | 'unsubscribing'
@@ -99,16 +99,13 @@ export default function Settings() {
   }
 
   return (
-    <main className="settings">
-      <header className="settings__header">
-        <Link to="/" className="settings__back">← Today</Link>
-        <h1 className="settings__title">Settings</h1>
-      </header>
+    <main className="page settings">
+      <PageHeader title="Settings" subtitle="Reminders, streak rules, and app data." />
 
-      <section className="settings__card">
+      <section className="card">
         <div className="settings__row">
           <div className="settings__rowText">
-            <h2 className="settings__rowTitle">Reminders</h2>
+            <h2 className="card__title">Reminders</h2>
             <p className="settings__rowHint">
               A push notification at your morning and evening times, but only if
               that check-in hasn't been filled yet — plus a Sunday reminder to
@@ -160,10 +157,10 @@ export default function Settings() {
         </p>
       </section>
 
-      <section className="settings__card">
+      <section className="card">
         <div className="settings__row">
           <div className="settings__rowText">
-            <h2 className="settings__rowTitle">Gym rest budget</h2>
+            <h2 className="card__title">Gym rest budget</h2>
             <p className="settings__rowHint">
               How many rest days per week before the streak resets. Counted Mon–Sun.
             </p>
@@ -204,10 +201,10 @@ export default function Settings() {
         onCoords={(lat, lon) => patchSettings({ latitude: lat, longitude: lon })}
       />
 
-      <section className="settings__card">
+      <section className="card">
         <div className="settings__row">
           <div className="settings__rowText">
-            <h2 className="settings__rowTitle">App cache</h2>
+            <h2 className="card__title">App cache</h2>
             <p className="settings__rowHint">
               Still on an old version after a deploy? This clears the cached app
               and reloads from the server. Entries live in the database, so
@@ -271,10 +268,10 @@ function LocationSection({
   const hasCoords = lat != null && lon != null
 
   return (
-    <section className="settings__card">
+    <section className="card">
       <div className="settings__row">
         <div className="settings__rowText">
-          <h2 className="settings__rowTitle">Location</h2>
+          <h2 className="card__title">Location</h2>
           <p className="settings__rowHint">
             Used silently to attach weather to your daily entries. A free-text
             label is just for your reference; coordinates power the weather lookup.

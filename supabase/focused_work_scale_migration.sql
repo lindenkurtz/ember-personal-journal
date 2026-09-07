@@ -26,7 +26,7 @@ begin
     where ns.nspname = 'public'
       and rel.relname = 'entries'
       and con.contype = 'c'
-      and pg_get_constraintdef(con) like '%focused_work%'
+      and pg_get_constraintdef(con.oid) like '%focused_work%'
   loop
     execute format('alter table public.entries drop constraint %I', c);
   end loop;

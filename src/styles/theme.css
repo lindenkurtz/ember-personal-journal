@@ -1,6 +1,6 @@
 /*
  * Ember — warm journal palette.
- * Single source of truth for color, radius, and shadow tokens.
+ * Single source of truth for color, radius, shadow, and page-shell tokens.
  */
 :root {
   /* Surface */
@@ -34,4 +34,21 @@
 
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Page shell — consumed by `.page` in global.css, which every scrolling
+     route uses. Kept as tokens so the six routes can't drift apart the way
+     they did when each stylesheet carried its own copy of these values. */
+  --page-max: 720px;
+  --page-gap: 20px;
+  /* Safe-area-aware so the notch doesn't clip the header and the home
+     indicator doesn't sit on top of the bottom cards. The +16px on top is a
+     breathing buffer — env(safe-area-inset-top) only reports the obstructed
+     area, so content placed flush against it still reads as clipped. The
+     check-in flows deliberately don't use this: they're a viewport-anchored
+     grid with tighter top/bottom values of their own (see Morning.css). */
+  --page-padding:
+    max(44px, calc(env(safe-area-inset-top) + 16px))
+    max(20px, env(safe-area-inset-right))
+    max(56px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
 }

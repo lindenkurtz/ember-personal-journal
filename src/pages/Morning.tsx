@@ -132,7 +132,7 @@ export default function Morning() {
       navigate('/')
     } catch (err) {
       console.error(err)
-      setError("Couldn't save your entry. Check your connection and try again.")
+      setError("Couldn't save just now. Try again in a moment.")
       setSubmitting(false)
     }
   }
@@ -140,13 +140,13 @@ export default function Morning() {
   return (
     <main className="morning">
       <header className="morning__header">
-        <span className="morning__date">{prettyDay()}</span>
+        <span className="morning__date">{`${prettyDay()} · morning`}</span>
         <ProgressDots total={QUESTIONS.length} current={idx} />
       </header>
 
       <div className="morning__stage">
         <AnimatePresence mode="wait">
-          <Question step={step} draft={draft} setDraft={setDraft} />
+          <StepView step={step} draft={draft} setDraft={setDraft} />
         </AnimatePresence>
       </div>
 
@@ -174,7 +174,7 @@ export default function Morning() {
   )
 }
 
-function Question({
+function StepView({
   step,
   draft,
   setDraft

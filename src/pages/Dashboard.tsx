@@ -111,7 +111,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="dash">
+    <main className="page dash">
       <header className="dash__header">
         <div>
           <p className="dash__date">{prettyDay()}</p>
@@ -200,8 +200,8 @@ export default function Dashboard() {
             />
           </section>
 
-          <section className="dash__card">
-            <div className="dash__cardHeader">
+          <section className="card">
+            <div className="card__header">
               <h2>Gym — last 30 days</h2>
               <span className="muted">amber = kept</span>
             </div>
@@ -212,16 +212,16 @@ export default function Dashboard() {
             />
           </section>
 
-          <section className="dash__card">
-            <div className="dash__cardHeader">
+          <section className="card">
+            <div className="card__header">
               <h2>Sleep quality</h2>
               <span className="muted">last 14 nights</span>
             </div>
             <SleepTrendChart entries={entries} />
           </section>
 
-          <section className="dash__card">
-            <div className="dash__cardHeader">
+          <section className="card">
+            <div className="card__header">
               <h2>Social time</h2>
             </div>
             <SocialFrequency entries={entries} />

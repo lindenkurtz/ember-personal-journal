@@ -22,8 +22,8 @@ export default function ScreenTimeTrendCard({ trend }: Props) {
   const direction = pctChange > 0.5 ? 'up' : pctChange < -0.5 ? 'down' : 'flat'
 
   return (
-    <Link to="/screentime" className="dash__card sttrend">
-      <div className="dash__cardHeader">
+    <Link to="/screentime" className="card sttrend">
+      <div className="card__header">
         <div>
           <h2>Phone time — daily avg</h2>
           <span className="sttrend__range muted">

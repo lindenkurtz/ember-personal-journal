@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { Entry, getAllEntries, CONFOUND_KEYS, CONFOUND_LABELS, ConfoundKey } from '../lib/entries'
 import { getAllScreenTime, ScreenTimeRow } from '../lib/screenTime'
 import { listContextPeriods, periodForDate, ContextPeriod } from '../lib/contextPeriods'
+import PageHeader from '../components/PageHeader'
 import './History.css'
 
 /**
@@ -40,11 +40,8 @@ export default function History() {
   const rows = useMemo(() => entries.slice().reverse(), [entries])
 
   return (
-    <main className="history">
-      <header className="history__header">
-        <Link to="/" className="history__back">← Today</Link>
-        <h1 className="history__title">History</h1>
-      </header>
+    <main className="page history">
+      <PageHeader title="History" subtitle="Every day you've logged." />
 
       {loading ? (
         <p className="history__empty">Loading…</p>
@@ -56,7 +53,7 @@ export default function History() {
             const flags = activeConfounds(e)
             const open = expanded === e.date
             return (
-              <li key={e.date} className="history__item">
+              <li key={e.date} className="card card--flush">
                 <button
                   className="history__rowBtn"
                   aria-expanded={open}

@@ -45,11 +45,74 @@ textarea {
   border-radius: 4px;
 }
 
-/* Route shell — sizing and safe-area handling live on each page so the math
- * isn't double-counted. This rule stays as a stable hook for future global
- * concerns (e.g. a top notification bar) but otherwise does nothing. */
+/* Route shell — the wrapper around each route's <main>. Sizing and safe-area
+ * handling belong to `.page` below (or to the check-in flows' own grid), so
+ * the math isn't double-counted. This rule stays as a stable hook for future
+ * global concerns (e.g. a top notification bar) but otherwise does nothing. */
 .app-shell {
   display: contents;
+}
+
+/* Page shell — every scrolling route's <main>. Shared so a header lands at
+ * the same inset on each of them; the check-in flows opt out on purpose
+ * (viewport-anchored grid, see Morning.css). A route that needs a narrower
+ * measure caps its own content, not the page — see .st__grid. */
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--page-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+}
+
+/* Card — the generic section surface. Global rather than page-scoped because
+ * four routes and a component share it: as `.dash__card` in Dashboard.css it
+ * only rendered on Finance because Vite happened to emit one stylesheet, so
+ * any future route-level code splitting would have stripped Finance's cards. */
+.card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* A page overriding any of the above must double up the selector
+ * (`.card.st__grid`, not `.st__grid`). main.tsx imports App before this file,
+ * so every page stylesheet is emitted *ahead* of it and a single-class
+ * override loses the cascade. Reordering the import would fix that but would
+ * also drop :focus-visible below `.st__cell { outline: none }` and take the
+ * focus ring off the screen-time inputs, so specificity is the safe lever. */
+
+/* For content that paints to the card's own edges — History's collapsible
+ * rows, where the tap target has to cover the whole surface. */
+.card--flush {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card__header h2,
+.card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+
+.card__header .muted {
+  font-size: 12px;
 }
 
 /* Small util: muted helper text */

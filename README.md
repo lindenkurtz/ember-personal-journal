@@ -248,7 +248,7 @@ gets a 404, and a wrong key gets the same 404 so the endpoint isn't discoverable
 
 ## External data ingestion (Apple Health)
 
-HRV, resting heart rate, step count, and sleep duration are **not** written
+HRV, resting heart rate, step count, and sleep duration are not written
 by the app. They come from an iOS Shortcut that POSTs directly to the
 Supabase REST API. The app only needs the columns to exist (nullable).
 

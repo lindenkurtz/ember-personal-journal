@@ -3,7 +3,11 @@ import { todayKey, lastNDays } from './date'
 
 export type GymChoice = 'yes' | 'no'
 
-export type FocusedWork = 'none' | 'light' | 'solid' | 'deep'
+/** Ordinal, ordered by hours: none / <1h / 1–3h / 3–5h / 5h+. `heavy` was added
+ * 2026-09-06 to split an open-ended `deep` (then 3h+); on rows before that date
+ * `deep` means "≥3h" and is not resolved any finer. Cut points at 1h and 3h are
+ * unchanged, so every other older value is still exactly correct. */
+export type FocusedWork = 'none' | 'light' | 'solid' | 'deep' | 'heavy'
 
 /** Ordinal replacement for the `social` boolean, which carries too little
  * resolution to separate days. */

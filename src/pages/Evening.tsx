@@ -58,16 +58,36 @@ const FOCUSED_OPTIONS = [
   { value: 'none', label: 'None' },
   { value: 'light', label: 'Light (<1h)' },
   { value: 'solid', label: 'Solid (1–3h)' },
-  { value: 'deep', label: 'Deep (3h+)' }
+  { value: 'deep', label: 'Deep (3–5h)' },
+  { value: 'heavy', label: 'Heavy (5h+)' }
 ] as const
 
-// Persistent (not a tooltip) so scoring stays consistent over months.
+// Persistent (not a tooltip) so scoring stays consistent over months. Two clauses,
+// both load-bearing: self-directed excludes lecture, and the autopilot test excludes
+// comfortable execution. It is a test on the task's demand, not on how tired the day
+// felt — otherwise this becomes a second energy rating and tracks day_quality by
+// construction.
 const FOCUSED_DEFINITION =
-  'Focused, cognitively demanding self-directed work: studying, problem sets, ' +
-  'research, applications, side projects. Not lecture, email, or routine job tasks.'
+  "Self-directed and hard enough you couldn't have done it on autopilot. " +
+  'Problem sets, studying, research, building something at the edge of your ability. ' +
+  'Not lecture, not email, not comfortable execution.'
+
+// Shown inside the Sick chip rather than as its own step or a block below the
+// list: a normal day should still cost one tap, and keeping the choice within the
+// chip's own box is what holds the step inside one screen.
+const SICK_LEVEL_OPTIONS = [
+  { value: '1', label: 'Light' },
+  { value: '2', label: 'Major' }
+] as const
+type SickLevelKey = (typeof SICK_LEVEL_OPTIONS)[number]['value']
+
+// Persistent, same reason as FOCUSED_DEFINITION: the boundary has to mean the same
+// thing in month six as it did in month one.
+const SICK_LEVEL_DEFINITION =
+  'Light = off, but the day still worked · Major = the day was lost to it.'
 
 const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
-  { value: 'sick', label: CONFOUND_LABELS.sick },
+  { value: 'sick', label: CONFOUND_LABELS.sick, hint: SICK_LEVEL_DEFINITION },
   { value: 'alcohol', label: CONFOUND_LABELS.alcohol },
   {
     value: 'slept_away',
@@ -82,19 +102,6 @@ const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
     hint: 'Exam or major deadline within 48h.'
   }
 ]
-
-// Revealed under the Sick chip rather than given its own step: a normal day should
-// still cost one tap, and this flow is long enough already.
-const SICK_LEVEL_OPTIONS = [
-  { value: '1', label: 'Light' },
-  { value: '2', label: 'Major' }
-] as const
-type SickLevelKey = (typeof SICK_LEVEL_OPTIONS)[number]['value']
-
-// Persistent, same reason as FOCUSED_DEFINITION: the boundary has to mean the same
-// thing in month six as it did in month one.
-const SICK_LEVEL_DEFINITION =
-  'Light = off, but the day still worked · Major = the day was lost to it.'
 
 interface DraftEvening {
   gym_actual: GymChoice | null
@@ -353,6 +360,28 @@ function StepView({
     )
   }
   if (step === 'confounds') {
+    // The severity choice rides inside the Sick chip, so turning it on grows that
+    // one chip instead of adding a block under the list. ToggleChipGroup only
+    // renders an expansion while its chip is on.
+    const options =
+      targetDate >= SICK_LEVEL_START
+        ? CONFOUND_OPTIONS.map((o) =>
+            o.value === 'sick'
+              ? {
+                  ...o,
+                  expansion: (
+                    <PillGroup
+                      ariaLabel="Sickness level"
+                      variant="compact"
+                      options={SICK_LEVEL_OPTIONS}
+                      value={draft.sick_level ? (String(draft.sick_level) as SickLevelKey) : null}
+                      onChange={(v) => setDraft({ ...draft, sick_level: Number(v) as SickLevel })}
+                    />
+                  )
+                }
+              : o
+          )
+        : CONFOUND_OPTIONS
     return (
       <QuestionCard
         stepKey="confounds"
@@ -361,7 +390,7 @@ function StepView({
       >
         <ToggleChipGroup
           ariaLabel="Confounding events"
-          options={CONFOUND_OPTIONS}
+          options={options}
           selected={CONFOUND_KEYS.filter((k) => draft.confounds[k])}
           onToggle={(k) =>
             setDraft({
@@ -370,17 +399,6 @@ function StepView({
             })
           }
         />
-        {targetDate >= SICK_LEVEL_START && draft.confounds.sick && (
-          <div className="morning__subq">
-            <p className="morning__subqHint">{SICK_LEVEL_DEFINITION}</p>
-            <PillGroup
-              ariaLabel="Sickness level"
-              options={SICK_LEVEL_OPTIONS}
-              value={draft.sick_level ? (String(draft.sick_level) as SickLevelKey) : null}
-              onChange={(v) => setDraft({ ...draft, sick_level: Number(v) as SickLevel })}
-            />
-          </div>
-        )}
       </QuestionCard>
     )
   }

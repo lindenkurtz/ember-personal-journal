@@ -384,7 +384,10 @@ const main = async () => {
     auth: { persistSession: false },
   });
 
-  const stamp = new Date().toISOString().slice(0, 10);
+  // Local, not UTC: an evening export would otherwise be stamped with tomorrow's
+  // date and sort ahead of the day it actually covers. Same reason the SPA never
+  // uses toISOString for a date key.
+  const stamp = new Date().toLocaleDateString('en-CA');
   const outDir = join(ROOT, 'analysis-bundles', `ember-${stamp}`);
   mkdirSync(join(outDir, 'raw'), { recursive: true });
 

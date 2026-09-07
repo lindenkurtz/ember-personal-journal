@@ -40,3 +40,21 @@
   border-color: var(--terracotta);
   box-shadow: 0 0 0 1px var(--terracotta) inset, 0 6px 18px rgba(212, 132, 90, 0.18);
 }
+
+/* Must come after the base rule and its media query: equal specificity, so source
+ * order is what keeps compact pills in a row on a narrow screen. */
+.pills--compact {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.pills--compact .pills__pill {
+  min-height: 40px;
+  padding: 9px 14px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+}
+
+.pills--compact .pills__pill.is-selected {
+  box-shadow: 0 0 0 1px var(--terracotta) inset;
+}

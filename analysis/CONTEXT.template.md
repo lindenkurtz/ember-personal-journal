@@ -61,6 +61,11 @@ the other**, or successive runs quietly stop being comparable.
   boolean before that. `social_level` is the real column; `social` exists so the
   full span stays one column. The export warns, with dates, on any row whose level
   and boolean disagree.
+- **`sick` / `sick_level`** — both emitted **raw**, and deliberately unlike
+  `social` above: `sick` is not rebuilt from the level. `sick` is the long series
+  and goes on meaning a major day across the split; `sick_level` is the finer
+  three-state column that starts at the cutover. The export warns, with dates, on
+  any row where the two disagree.
 - **`context`** — resolved from `context_periods` by date.
 
 ## Cleaning rules already applied
@@ -72,6 +77,11 @@ the other**, or successive runs quietly stop being comparable.
   and deriving a level from a boolean would invent observations that were never
   made. Record the start date in the schema table and leave the nulls alone. (This
   is the same rule as `mac_minutes`' 0-vs-null.)
+- **An ordinal is not automatically an interval.** Some levels are ordered by
+  impact but name genuinely different kinds of day rather than doses of one thing.
+  Where the schema table says so, compare the levels as separate categories against
+  the baseline — never average them, and never read a coefficient on the level as a
+  per-step effect.
 
 Nothing else is removed. Bad values are left in on purpose: an implausible sleep
 duration or a resting HR of 0 should be **flagged with its date** so it can be
@@ -106,7 +116,12 @@ the data, and what the analysis should do about it. The kinds that come up:
    related columns is most trustworthy and why.
 7. **An event type that had no field before some date.** Those days are invisible
    and silently depress whatever they affect.
-8. **A field that has saturated.** A boolean stuck at true (or an ordinal pinned to
+8. **A coarse field split into a finer one mid-series.** The old column keeps
+   running, but its rows before the split are undifferentiated — they silently
+   contain whichever sub-states the split later separated. Note the cutover date,
+   which side of the split the old column now tracks, and that a rate computed
+   across the boundary is comparing two different definitions.
+9. **A field that has saturated.** A boolean stuck at true (or an ordinal pinned to
    one level) under the subject's current circumstances has no variance left and
    cannot predict anything. Note the date it saturated and the context that caused
    it: findings on that field come only from the earlier rows where it still
@@ -128,6 +143,7 @@ series.
 | Field | Added | Notes |
 |---|---|---|
 | _field_ | _YYYY-MM_ | _units, level definitions, null semantics_ |
+| _field replacing a coarser one_ | _YYYY-MM-DD_ | _what the old column now means, and that its earlier rows are undifferentiated_ |
 
 Also record definitions that aren't obvious from the field name — where the
 boundary sits on an ordinal scale, what exactly counts as a `travel_day`, whether

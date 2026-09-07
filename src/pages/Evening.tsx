@@ -15,13 +15,15 @@ import {
   GymChoice,
   FocusedWork,
   SocialLevel,
+  SickLevel,
   EntryPatch,
   ConfoundKey,
   CONFOUND_KEYS,
   CONFOUND_LABELS,
   TRACKING_V2_START,
   FOCUSED_WORK_START,
-  SOCIAL_LEVEL_START
+  SOCIAL_LEVEL_START,
+  SICK_LEVEL_START
 } from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
 import { holdUpdates } from '../lib/swUpdate'
@@ -81,11 +83,25 @@ const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
   }
 ]
 
+// Revealed under the Sick chip rather than given its own step: a normal day should
+// still cost one tap, and this flow is long enough already.
+const SICK_LEVEL_OPTIONS = [
+  { value: '1', label: 'Light' },
+  { value: '2', label: 'Major' }
+] as const
+type SickLevelKey = (typeof SICK_LEVEL_OPTIONS)[number]['value']
+
+// Persistent, same reason as FOCUSED_DEFINITION: the boundary has to mean the same
+// thing in month six as it did in month one.
+const SICK_LEVEL_DEFINITION =
+  'Light = off, but the day still worked · Major = the day was lost to it.'
+
 interface DraftEvening {
   gym_actual: GymChoice | null
   focused_work: FocusedWork | null
   last_meal_start_time: string | null
   confounds: Record<ConfoundKey, boolean>
+  sick_level: SickLevel | null
   social: boolean | null
   social_level: SocialLevel | null
   day_quality: number | null
@@ -128,6 +144,7 @@ export default function Evening() {
     focused_work: null,
     last_meal_start_time: null,
     confounds: { ...NO_CONFOUNDS },
+    sick_level: null,
     social: null,
     social_level: null,
     day_quality: null,
@@ -146,13 +163,20 @@ export default function Evening() {
     getEntry(targetDate)
       .then((e) => {
         if (cancelled || !e) return
+        const confounds = Object.fromEntries(
+          CONFOUND_KEYS.map((k) => [k, e[k] ?? false])
+        ) as Record<ConfoundKey, boolean>
+        // A light day saves `sick` as false, so the chip has to come from the level
+        // wherever one exists — reading the boolean would show a logged light day as
+        // not sick and silently clear it on the next save.
+        if (e.sick_level != null) confounds.sick = e.sick_level > 0
         setDraft((d) => ({
           gym_actual: e.gym_actual ?? e.gym_intention ?? d.gym_actual,
           focused_work: e.focused_work ?? d.focused_work,
           last_meal_start_time: e.last_meal_start_time ?? d.last_meal_start_time,
-          confounds: Object.fromEntries(
-            CONFOUND_KEYS.map((k) => [k, e[k] ?? false])
-          ) as Record<ConfoundKey, boolean>,
+          confounds,
+          // Never derived from the boolean, for the same reason as social_level.
+          sick_level: e.sick_level ?? d.sick_level,
           social: e.social ?? d.social,
           // Never derived from the boolean: old rows were never rated at this
           // resolution and a seeded level would be an invented observation.
@@ -206,6 +230,16 @@ export default function Evening() {
         // "tracked, nothing unusual", which the analysis must be able to tell
         // apart from the pre-v2 nulls.
         for (const k of CONFOUND_KEYS) patch[k] = draft.confounds[k]
+      }
+      if (targetDate >= SICK_LEVEL_START) {
+        // Chip off is an explicit 0 - "tracked, not sick" - for the same reason the
+        // flags write explicit false.
+        const level = draft.confounds.sick ? draft.sick_level : 0
+        patch.sick_level = level
+        // Deliberately overrides the flag loop above: `sick` goes on meaning a major
+        // day, exactly what it meant before the split, so the pre-cutover series
+        // stays comparable and light days never inflate it.
+        patch.sick = level === null ? null : level >= 2
       }
       if (targetDate >= FOCUSED_WORK_START) {
         patch.focused_work = draft.focused_work
@@ -336,6 +370,17 @@ function StepView({
             })
           }
         />
+        {targetDate >= SICK_LEVEL_START && draft.confounds.sick && (
+          <div className="morning__subq">
+            <p className="morning__subqHint">{SICK_LEVEL_DEFINITION}</p>
+            <PillGroup
+              ariaLabel="Sickness level"
+              options={SICK_LEVEL_OPTIONS}
+              value={draft.sick_level ? (String(draft.sick_level) as SickLevelKey) : null}
+              onChange={(v) => setDraft({ ...draft, sick_level: Number(v) as SickLevel })}
+            />
+          </div>
+        )}
       </QuestionCard>
     )
   }
@@ -408,7 +453,11 @@ function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
     case 'meal':
       return !!d.last_meal_start_time
     case 'confounds':
-      return true // no selection = a normal day; a single tap moves past
+      // No selection is still a normal day. The one gate is the revealed level: a
+      // Sick chip with nothing picked would save as 0 and read back as not sick.
+      return targetDate >= SICK_LEVEL_START && d.confounds.sick
+        ? d.sick_level === 1 || d.sick_level === 2
+        : true
     case 'social':
       return targetDate >= SOCIAL_LEVEL_START ? d.social_level !== null : d.social !== null
     case 'day_quality':

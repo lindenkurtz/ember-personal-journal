@@ -273,7 +273,11 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
               : null,
       focused_work: e.focused_work ?? null,
 
+      // Both emitted raw. Unlike `social`, `sick` is deliberately NOT rebuilt from
+      // the level: it is the long "major day" series, and sick_level is the finer
+      // split that only starts 2026-09-06.
       sick: flag(e.sick),
+      sick_level: e.sick_level ?? null,
       alcohol: flag(e.alcohol),
       slept_away: flag(e.slept_away),
       travel_day: flag(e.travel_day),
@@ -315,6 +319,22 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
     console.warn(
       `  ! social_level disagrees with social on ${socialMismatches.length} row(s) — ` +
         `daily_merged uses the level: ${socialMismatches.join(', ')}`
+    );
+  }
+
+  // Same check for the sickness split: the evening flow writes `sick` = (sick_level
+  // >= 2) on every rated day, so a disagreement means something wrote one without
+  // the other. Both columns are emitted raw here, so neither hides the drift — but
+  // an unnoticed one would quietly move days between the two categories.
+  const sickMismatches = byDate(entries)
+    .filter(
+      (e) => e.sick_level != null && (e.sick == null || e.sick !== e.sick_level >= 2)
+    )
+    .map((e) => `${e.date} (level=${e.sick_level}, sick=${e.sick ?? 'null'})`);
+  if (sickMismatches.length) {
+    console.warn(
+      `  ! sick_level disagrees with sick on ${sickMismatches.length} row(s): ` +
+        sickMismatches.join(', ')
     );
   }
 

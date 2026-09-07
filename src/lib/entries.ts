@@ -9,6 +9,11 @@ export type FocusedWork = 'none' | 'light' | 'solid' | 'deep'
  * resolution to separate days. */
 export type SocialLevel = 0 | 1 | 2 | 3
 
+/** Ordinal replacement for the `sick` boolean. Not a severity axis: 1 and 2 are
+ * different kinds of day that happen to be ordered by impact, so they are read as
+ * separate categories — never summed, averaged, or treated as one scale. */
+export type SickLevel = 0 | 1 | 2
+
 /** The six confound flags captured in the evening flow. On historical rows all
  * six are null = "untracked"; from TRACKING_V2_START the evening save writes
  * explicit true/false for every flag. Preserve that distinction in any new
@@ -47,6 +52,11 @@ export const FOCUSED_WORK_START = '2026-08-15'
  * resolution, and a make-up entry must not invent a level for them. */
 export const SOCIAL_LEVEL_START = '2026-09-06'
 
+/** First date the evening flow asks sickness as a 0-2 level instead of one chip.
+ * Earlier days keep the bare `sick` boolean: they were never recorded at this
+ * resolution, and a make-up entry must not invent a level for one. */
+export const SICK_LEVEL_START = '2026-09-06'
+
 /** Shape of a single daily entry. One row per date. */
 export interface Entry {
   date: string // YYYY-MM-DD, primary key
@@ -67,7 +77,8 @@ export interface Entry {
   deep_work_plan_note: string | null // legacy, no longer written — retired July 2026
   focused_work: FocusedWork | null // replaces deep work for the school year, asked from FOCUSED_WORK_START
   last_meal_start_time: string | null // 'HH:MM' — when the last meal of the day STARTED
-  sick: boolean | null
+  sick: boolean | null // from SICK_LEVEL_START written as (sick_level >= 2), so it keeps meaning a major day
+  sick_level: SickLevel | null // 0 none / 1 light / 2 major, asked from SICK_LEVEL_START
   alcohol: boolean | null
   slept_away: boolean | null // the night ending this morning (same row-date semantics as sleep fields)
   travel_day: boolean | null // 3+ hours in transit today

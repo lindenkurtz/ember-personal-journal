@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { Entry, getAllEntries, CONFOUND_KEYS, CONFOUND_LABELS } from '../lib/entries'
+import { Entry, getAllEntries, CONFOUND_KEYS, CONFOUND_LABELS, ConfoundKey } from '../lib/entries'
 import { getAllScreenTime, ScreenTimeRow } from '../lib/screenTime'
 import { listContextPeriods, periodForDate, ContextPeriod } from '../lib/contextPeriods'
 import './History.css'
@@ -53,7 +53,7 @@ export default function History() {
       ) : (
         <ul className="history__list">
           {rows.map((e) => {
-            const flags = CONFOUND_KEYS.filter((k) => e[k] === true)
+            const flags = activeConfounds(e)
             const open = expanded === e.date
             return (
               <li key={e.date} className="history__item">
@@ -69,7 +69,7 @@ export default function History() {
                   {flags.length > 0 && (
                     <span className="history__flags">
                       {flags.map((k) => (
-                        <span key={k} className="history__flag">{CONFOUND_LABELS[k]}</span>
+                        <span key={k} className="history__flag">{confoundLabel(e, k)}</span>
                       ))}
                     </span>
                   )}
@@ -88,6 +88,21 @@ export default function History() {
       )}
     </main>
   )
+}
+
+/** `sick` is written as (sick_level >= 2), so a light day carries a false flag and
+ * would otherwise disappear from History entirely. The level is the truth wherever
+ * one exists; older rows still only have the boolean. */
+function activeConfounds(e: Entry): ConfoundKey[] {
+  return CONFOUND_KEYS.filter((k) =>
+    k === 'sick' && e.sick_level != null ? e.sick_level > 0 : e[k] === true
+  )
+}
+
+function confoundLabel(e: Entry, k: ConfoundKey): string {
+  return k === 'sick' && e.sick_level === 1
+    ? `${CONFOUND_LABELS.sick} (light)`
+    : CONFOUND_LABELS[k]
 }
 
 function compactSummary(e: Entry): string {
@@ -113,7 +128,7 @@ function DayDetail({
   st?: ScreenTimeRow
   period: ContextPeriod | null
 }) {
-  const flags = CONFOUND_KEYS.filter((k) => e[k] === true)
+  const flags = activeConfounds(e)
   const confoundsTracked = CONFOUND_KEYS.some((k) => e[k] != null)
   const legacyDw =
     e.deep_work_planned != null ||
@@ -148,7 +163,7 @@ function DayDetail({
             ? 'not tracked'
             : flags.length === 0
               ? 'none'
-              : flags.map((k) => CONFOUND_LABELS[k]).join(', ')
+              : flags.map((k) => confoundLabel(e, k)).join(', ')
         }
       />
       {legacyDw && (

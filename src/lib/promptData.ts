@@ -2,9 +2,10 @@ import { Entry, CONFOUND_KEYS, ConfoundKey } from './entries'
 import { ScreenTimeRow } from './screenTime'
 import { ContextPeriod } from './contextPeriods'
 
-// One row builder + one legend shared by the Patterns analysis and the morning
-// nudge so a new tracked field can never appear in one prompt and not the other
-// (CLAUDE.md: every field is a predictor; dq stays the single target).
+// The row builder and legend behind the Patterns prompt. Kept out of the page
+// so the whole schema-to-prompt mapping stays one reviewable block when a
+// tracked field is added (CLAUDE.md: every field is a predictor; dq stays the
+// single target).
 
 const FLAG_CODES: Record<ConfoundKey, string> = {
   sick: 'sick',

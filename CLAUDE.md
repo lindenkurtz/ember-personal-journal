@@ -368,9 +368,10 @@ Every recipe ends the same way: run `npm run build` from the repo root.
    `targetDate >= START`.
 4. Add the question step to Morning or Evening (recipe below).
 5. Add it to **both** the row builder and `FIELD_LEGEND` in
-   [src/lib/promptData.ts](src/lib/promptData.ts) — one edit covers the Patterns
-   analysis and the morning nudge, which is exactly why they share the module.
-   Use a short key; the legend must state units and the null semantics.
+   [src/lib/promptData.ts](src/lib/promptData.ts) — the Patterns prompt is built
+   from those two together, so a field added to one and not the other is either
+   invisible or unlabelled. Use a short key; the legend must state units and the
+   null semantics.
 6. Add it to `buildDaily` in
    [scripts/export-analysis-bundle.mjs](scripts/export-analysis-bundle.mjs) and
    document it in [analysis/CONTEXT.md](analysis/CONTEXT.md) — including its
@@ -415,9 +416,9 @@ an input, tokens from `theme.css` for every color. Finance-only components go in
 
 - Model, `max_tokens` default, vision handling: `MODEL` and the request body in
   [functions/api/claude.ts](functions/api/claude.ts).
-- Shared data and legend for both prompts:
+- Data and legend for the Patterns prompt:
   [src/lib/promptData.ts](src/lib/promptData.ts).
-- Prompt wording: `buildNudgePrompt` in Morning, `buildPrompt` in
+- Prompt wording: `buildPrompt` in
   [src/pages/Patterns.tsx](src/pages/Patterns.tsx), the extraction prompt in
   [src/lib/finance/extract.ts](src/lib/finance/extract.ts).
 - Requires `npm run pages:dev` to exercise — `npm run dev` has no `/api/*`.

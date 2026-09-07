@@ -21,9 +21,9 @@ Conventions and the "why" behind the design decisions live in
 - **React + Vite** (TypeScript), deployed as a static site to Cloudflare Pages
 - **Supabase** for persistence — `entries` (one row per day), `screen_time`,
   `context_periods`, `push_*`, and the `finance_*` tables
-- **Anthropic Claude** for the morning nudge, the patterns analysis, and
-  screenshot transaction extraction — called through a Cloudflare Pages Function
-  so the API key never ships to the browser
+- **Anthropic Claude** for the patterns analysis and screenshot transaction
+  extraction — called through a Cloudflare Pages Function so the API key never
+  ships to the browser
 - **Plaid** for bank sync, called via raw REST from a Pages Function and the
   cron Worker
 - **Plus Jakarta Sans** + warm palette
@@ -37,8 +37,8 @@ npm run dev                # http://localhost:5173
 ```
 
 `npm run dev` serves the SPA only — anything under `/api/*` (the Claude proxy,
-Plaid) 404s. The morning check-in degrades gracefully without it (the nudge is
-skipped); Patterns and Finance need the Functions running:
+Plaid) 404s. The journal check-ins don't touch `/api/*` at all; Patterns and
+Finance need the Functions running:
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .dev.vars

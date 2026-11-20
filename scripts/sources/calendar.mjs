@@ -13,7 +13,9 @@
 // analysis/labels/calendar_unlabeled.csv for the next labeling pass.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 export const CATEGORIES = [
@@ -108,6 +110,70 @@ const addDays = (k, n) => {
   return d.toISOString().slice(0, 10);
 };
 
+const APP_NAME = 'Ember Calendar Export';
+
+// The usage strings are the text of the permission prompt. Both generations of
+// key: the Full Access ones are what macOS 14+ checks, the older ones cover 13.
+const APP_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>local.ember.calendar-export</string>
+  <key>CFBundleName</key><string>${APP_NAME}</string>
+  <key>CFBundleExecutable</key><string>calendar-dump</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSUIElement</key><true/>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>The Ember analysis export reduces calendar events to hours per category, locally.</string>
+  <key>NSCalendarsUsageDescription</key><string>The Ember analysis export reduces calendar events to hours per category, locally.</string>
+  <key>NSRemindersFullAccessUsageDescription</key><string>The Ember analysis export counts completed reminders per day, locally.</string>
+  <key>NSRemindersUsageDescription</key><string>The Ember analysis export counts completed reminders per day, locally.</string>
+</dict>
+</plist>
+`;
+
+/**
+ * Builds scripts/calendar-dump.swift into a minimal app bundle, once per change
+ * to the source, and returns its path.
+ *
+ * macOS 14+ only shows the Calendar/Reminders prompt when the *responsible*
+ * process — the terminal, for anything run from a shell — declares the Full
+ * Access usage keys. Terminals don't (iTerm2 carries only the pre-14 keys,
+ * Terminal and VS Code none), so `swift calendar-dump.swift` is denied without
+ * ever asking. Launched through `open`, the bundle is its own responsible
+ * process, so the prompt names it and the grant sticks to it, whichever terminal
+ * ran the export. It's ad-hoc signed, and macOS ties the grant to that
+ * signature, so editing the Swift file means approving the prompt once more.
+ */
+const helperApp = (root) => {
+  const src = join(root, 'scripts', 'calendar-dump.swift');
+  const stamp = createHash('sha256').update(readFileSync(src)).update(APP_PLIST).digest('hex');
+  const app = join(root, 'node_modules', '.cache', 'ember-calendar', 'EmberCalendar.app');
+  const stampFile = join(app, 'Contents', 'Resources', 'source.sha256');
+  if (existsSync(stampFile) && readFileSync(stampFile, 'utf8') === stamp) return app;
+
+  rmSync(app, { recursive: true, force: true });
+  mkdirSync(join(app, 'Contents', 'MacOS'), { recursive: true });
+  mkdirSync(join(app, 'Contents', 'Resources'), { recursive: true });
+  writeFileSync(join(app, 'Contents', 'Info.plist'), APP_PLIST);
+  // Written before signing so the seal covers it.
+  writeFileSync(stampFile, stamp);
+  console.log('  building calendar helper (once per change to calendar-dump.swift)…');
+  try {
+    execFileSync('swiftc', ['-O', src, '-o', join(app, 'Contents', 'MacOS', 'calendar-dump')], {
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    // swiftc already ad-hoc signs the bare binary, so codesign's stderr is just
+    // "replacing existing signature"; a real failure still throws on exit status.
+    execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'ignore' });
+  } catch (e) {
+    // Otherwise the stamp would vouch for a half-built bundle on the next run.
+    rmSync(app, { recursive: true, force: true });
+    throw e;
+  }
+  return app;
+};
+
 /**
  * date -> calendar/reminder columns, or null when disabled or unavailable.
  * `dates` is every journal date; values are a real 0 on any date in range with
@@ -123,17 +189,39 @@ export const buildCalendar = ({ root, dates, enabled }) => {
   // Today is still in progress; stop at yesterday like every other source.
   const to = addDays(new Date().toLocaleDateString('en-CA'), -1);
 
-  let dump;
+  let app;
   try {
-    const out = execFileSync('swift', [join(root, 'scripts', 'calendar-dump.swift'), from, to], {
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    });
-    dump = JSON.parse(out);
+    app = helperApp(root);
   } catch {
-    console.warn('  ! calendar-dump.swift failed (is Xcode’s command-line tools installed?) — calendar columns will be null');
+    console.warn('  ! couldn’t build calendar-dump.swift (are Xcode’s command-line tools installed?) — calendar columns will be null');
     return null;
+  }
+  let dump;
+  const tmp = mkdtempSync(join(tmpdir(), 'ember-calendar-'));
+  try {
+    const outFile = join(tmp, 'out.json');
+    const errFile = join(tmp, 'err.txt');
+    // -W waits for the helper to exit, which includes any permission prompt.
+    execFileSync(
+      'open',
+      ['-W', '-n', '-g', '--stdout', outFile, '--stderr', errFile, '-a', app, '--args', from, to],
+      { stdio: ['ignore', 'ignore', 'inherit'] }
+    );
+    const err = existsSync(errFile) ? readFileSync(errFile, 'utf8').trim() : '';
+    for (const line of err ? err.split('\n') : []) console.warn(`  ! calendar helper: ${line}`);
+    dump = JSON.parse(readFileSync(outFile, 'utf8'));
+  } catch {
+    console.warn('  ! calendar helper failed — calendar columns will be null');
+    return null;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  if (!dump.events_access || !dump.reminders_access) {
+    console.warn(
+      `  ! allow "${APP_NAME}" under System Settings → Privacy & Security → ` +
+        `${[!dump.events_access && 'Calendars', !dump.reminders_access && 'Reminders'].filter(Boolean).join(' and ')}, ` +
+        'then re-run the export'
+    );
   }
 
   const labelDir = join(root, 'analysis', 'labels');

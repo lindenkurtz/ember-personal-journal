@@ -1,11 +1,12 @@
 // Dumps Calendar events and completed Reminders for a date range as JSON on
-// stdout, for scripts/sources/calendar.mjs. macOS only; run through `swift`.
+// stdout, for scripts/sources/calendar.mjs. macOS only. Takes FROM and TO as
+// YYYY-MM-DD, inclusive.
 //
-//   swift scripts/calendar-dump.swift 2026-05-14 2026-11-19
-//
-// The first run triggers macOS's Calendar and Reminders permission prompts for
-// whichever app runs it (Terminal, iTerm, …). Everything stays local: the export
-// reduces it to daily aggregates before anything reaches the bundle.
+// The export compiles this into a small app bundle and launches it through
+// `open`, so the Calendar and Reminders prompts name that app rather than the
+// terminal. Run directly with `swift` from a shell, macOS 14+ denies access
+// without prompting — see helperApp in calendar.mjs. Everything stays local: the
+// export reduces it to daily aggregates before anything reaches the bundle.
 //
 // Events are split at local midnight so each record belongs to one day, and
 // times are minutes since that local midnight. Cancelled events and ones you

@@ -84,8 +84,9 @@ export const buildTakatime = async (dir, timeZone) => {
   const ai = byDay((hb) => AI_EDITORS.has(hb.editor));
 
   const stamps = heartbeats.map((hb) => algo.toEpochMs(hb.timestamp)).filter(Number.isFinite);
-  const first = algo.dayKey(Math.min(...stamps), timeZone);
-  const last = algo.dayKey(Math.max(...stamps), timeZone);
+  // reduce, not Math.min(...): heartbeat counts grow without bound and would overflow the call stack.
+  const first = algo.dayKey(stamps.reduce((m, s) => (s < m ? s : m), Infinity), timeZone);
+  const last = algo.dayKey(stamps.reduce((m, s) => (s > m ? s : m), -Infinity), timeZone);
   const min = (m, d) => Math.round((m.get(d) ?? 0) / 6e4);
 
   // Inside the span a day with no editor activity is a real 0 — TakaTime measures

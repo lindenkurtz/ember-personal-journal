@@ -99,7 +99,8 @@ export const buildSpotify = (dir, timeZone) => {
 
   const keys = [...days.keys()].sort();
   const first = keys[0];
-  const last = localParts(Math.max(...plays.map((p) => p.ms)), timeZone).date;
+  // reduce, not Math.max(...): a multi-year history overflows the call stack as spread arguments.
+  const last = localParts(plays.reduce((m, p) => (p.ms > m ? p.ms : m), -Infinity), timeZone).date;
   const out = new Map();
   // The last day is cut off wherever the export was requested, so it would read
   // as a light day — dropped, like focusd's in-progress day.

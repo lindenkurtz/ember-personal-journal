@@ -12,6 +12,7 @@ import {
   getEntry,
   upsertEntry,
   GymChoice,
+  WorkoutType,
   FocusedWork,
   SocialLevel,
   SickLevel,
@@ -22,7 +23,9 @@ import {
   TRACKING_V2_START,
   FOCUSED_WORK_START,
   SOCIAL_LEVEL_START,
-  SICK_LEVEL_START
+  SICK_LEVEL_START,
+  WORKOUT_TYPE_START,
+  WEEKLY_REFLECTION_START
 } from '../lib/entries'
 import { todayKey, prettyDay } from '../lib/date'
 import { holdUpdates } from '../lib/swUpdate'
@@ -31,6 +34,15 @@ import '../pages/Morning.css' // share the journal layout/buttons
 const GYM_OPTIONS = [
   { value: 'yes', label: 'Yes' },
   { value: 'no', label: 'No' }
+] as const
+
+// Revealed under "Yes" on the same card, like the sick level inside its chip: a
+// rest day still costs one tap, and a gym day costs two.
+const WORKOUT_OPTIONS = [
+  { value: 'upper', label: 'Upper' },
+  { value: 'lower', label: 'Lower' },
+  { value: 'run', label: 'Run' },
+  { value: 'other', label: 'Other' }
 ] as const
 
 // Pre-SOCIAL_LEVEL_START days only; a make-up for one of those is still yes/no.
@@ -109,6 +121,7 @@ const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
 
 interface DraftEvening {
   gym_actual: GymChoice | null
+  workout_type: WorkoutType | null
   focused_work: FocusedWork | null
   confounds: Record<ConfoundKey, boolean>
   sick_level: SickLevel | null
@@ -116,9 +129,16 @@ interface DraftEvening {
   social_level: SocialLevel | null
   day_quality: number | null
   note: string
+  week_best: string
+  week_struggle: string
 }
 
-type Step = 'gym' | 'focused' | 'confounds' | 'social' | 'day_quality' | 'note'
+type Step = 'gym' | 'focused' | 'confounds' | 'social' | 'day_quality' | 'week' | 'note'
+
+/** Sunday closes the Mon–Sun week, so it is the one evening that asks about it. */
+function asksWeekly(targetDate: string): boolean {
+  return targetDate >= WEEKLY_REFLECTION_START && parseISO(targetDate).getDay() === 0
+}
 
 const NO_CONFOUNDS = Object.fromEntries(
   CONFOUND_KEYS.map((k) => [k, false])
@@ -144,20 +164,25 @@ export default function Evening() {
     const q: Step[] = ['gym']
     if (targetDate >= FOCUSED_WORK_START) q.push('focused')
     if (targetDate >= TRACKING_V2_START) q.push('confounds')
-    q.push('social', 'day_quality', 'note')
+    q.push('social', 'day_quality')
+    if (asksWeekly(targetDate)) q.push('week')
+    q.push('note')
     return q
   }, [targetDate])
 
   const [step, setStep] = useState<Step>('gym')
   const [draft, setDraft] = useState<DraftEvening>({
     gym_actual: null,
+    workout_type: null,
     focused_work: null,
     confounds: { ...NO_CONFOUNDS },
     sick_level: null,
     social: null,
     social_level: null,
     day_quality: null,
-    note: ''
+    note: '',
+    week_best: '',
+    week_struggle: ''
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -183,6 +208,7 @@ export default function Evening() {
           // gym_intention is no longer asked; it only seeds make-ups for days
           // from before the morning question was cut.
           gym_actual: e.gym_actual ?? e.gym_intention ?? d.gym_actual,
+          workout_type: e.workout_type ?? d.workout_type,
           focused_work: e.focused_work ?? d.focused_work,
           confounds,
           // Never derived from the boolean, for the same reason as social_level.
@@ -192,7 +218,9 @@ export default function Evening() {
           // resolution and a seeded level would be an invented observation.
           social_level: e.social_level ?? d.social_level,
           day_quality: e.day_quality ?? d.day_quality,
-          note: e.note ?? d.note
+          note: e.note ?? d.note,
+          week_best: e.week_best ?? d.week_best,
+          week_struggle: e.week_struggle ?? d.week_struggle
         }))
       })
       .catch(() => { /* ignore — let user fill manually */ })
@@ -252,6 +280,14 @@ export default function Evening() {
       }
       if (targetDate >= FOCUSED_WORK_START) {
         patch.focused_work = draft.focused_work
+      }
+      if (targetDate >= WORKOUT_TYPE_START) {
+        // A type left over from flipping Yes → No must not survive on a rest day.
+        patch.workout_type = draft.gym_actual === 'yes' ? draft.workout_type : null
+      }
+      if (asksWeekly(targetDate)) {
+        patch.week_best = draft.week_best.trim() || null
+        patch.week_struggle = draft.week_struggle.trim() || null
       }
       await upsertEntry(patch)
       navigate('/')
@@ -317,12 +353,26 @@ function StepView({
   if (step === 'gym') {
     return (
       <QuestionCard stepKey="gym" question="Did you gym?">
-        <PillGroup
-          ariaLabel="Gym actual"
-          options={GYM_OPTIONS}
-          value={draft.gym_actual}
-          onChange={(v) => setDraft({ ...draft, gym_actual: v })}
-        />
+        <div className="morning__subfields">
+          <PillGroup
+            ariaLabel="Gym actual"
+            options={GYM_OPTIONS}
+            value={draft.gym_actual}
+            onChange={(v) => setDraft({ ...draft, gym_actual: v })}
+          />
+          {targetDate >= WORKOUT_TYPE_START && draft.gym_actual === 'yes' && (
+            <div className="morning__subfield">
+              <span className="morning__sublabel">What kind?</span>
+              <PillGroup
+                ariaLabel="Workout type"
+                variant="compact"
+                options={WORKOUT_OPTIONS}
+                value={draft.workout_type}
+                onChange={(v) => setDraft({ ...draft, workout_type: v })}
+              />
+            </div>
+          )}
+        </div>
       </QuestionCard>
     )
   }
@@ -429,6 +479,36 @@ function StepView({
       </QuestionCard>
     )
   }
+  if (step === 'week') {
+    return (
+      <QuestionCard
+        stepKey="week"
+        question="Looking back on this week"
+        hint="Optional — a few words is plenty. Skip either one."
+      >
+        <div className="morning__subfields">
+          <label className="morning__subfield">
+            <span className="morning__sublabel">What did you enjoy most?</span>
+            <NoteInput
+              ariaLabel="Best part of the week"
+              rows={2}
+              value={draft.week_best}
+              onChange={(v) => setDraft({ ...draft, week_best: v })}
+            />
+          </label>
+          <label className="morning__subfield">
+            <span className="morning__sublabel">What was the biggest struggle?</span>
+            <NoteInput
+              ariaLabel="Biggest struggle of the week"
+              rows={2}
+              value={draft.week_struggle}
+              onChange={(v) => setDraft({ ...draft, week_struggle: v })}
+            />
+          </label>
+        </div>
+      </QuestionCard>
+    )
+  }
   return (
     <QuestionCard
       stepKey="note"
@@ -448,7 +528,10 @@ function StepView({
 function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
   switch (step) {
     case 'gym':
-      return d.gym_actual !== null
+      if (d.gym_actual === null) return false
+      return targetDate >= WORKOUT_TYPE_START && d.gym_actual === 'yes'
+        ? d.workout_type !== null
+        : true
     case 'focused':
       return d.focused_work !== null
     case 'confounds':
@@ -461,6 +544,7 @@ function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
       return targetDate >= SOCIAL_LEVEL_START ? d.social_level !== null : d.social !== null
     case 'day_quality':
       return d.day_quality !== null
+    case 'week':
     case 'note':
       return true // optional
   }

@@ -122,3 +122,24 @@
   text-align: center;
   margin: 0;
 }
+
+/* Stacked sub-fields inside one question card — the gym step's workout type and
+ * the Sunday reflection's two prompts. */
+.morning__subfields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.morning__subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.morning__sublabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}

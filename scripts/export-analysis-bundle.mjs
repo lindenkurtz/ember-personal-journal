@@ -255,6 +255,9 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
       last_meal_start_time: e.last_meal_start_time ?? null,
 
       gym: e.gym_actual === 'yes' ? 1 : e.gym_actual === 'no' ? 0 : null,
+      // Raw, and only meaningful on gym days: null on a 'no' day is not applicable,
+      // null on a gym day before 2026-11-21 is untracked.
+      workout_type: e.workout_type ?? null,
       // Retired Nov 2026 with the morning gym question; null after its last day.
       gym_intention: e.gym_intention === 'yes' ? 1 : e.gym_intention === 'no' ? 0 : null,
       // social_level (0-3) replaces the boolean from 2026-09-06. `social` stays the
@@ -304,6 +307,8 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
       weather_temp_f: e.weather_temp_f ?? null,
 
       note: e.note ?? null,
+      week_best: e.week_best ?? null,
+      week_struggle: e.week_struggle ?? null,
     };
   });
 

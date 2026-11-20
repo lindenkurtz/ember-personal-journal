@@ -5,9 +5,10 @@ interface Props {
   onChange: (v: string) => void
   placeholder?: string
   ariaLabel: string
+  rows?: number
 }
 
-export default function NoteInput({ value, onChange, placeholder, ariaLabel }: Props) {
+export default function NoteInput({ value, onChange, placeholder, ariaLabel, rows = 4 }: Props) {
   return (
     <textarea
       className="noteinput"
@@ -15,7 +16,7 @@ export default function NoteInput({ value, onChange, placeholder, ariaLabel }: P
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      rows={4}
+      rows={rows}
     />
   )
 }

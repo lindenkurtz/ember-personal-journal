@@ -71,6 +71,18 @@ the other**, or successive runs quietly stop being comparable.
   source doesn't cover (not set up, before it started, after its snapshot ends,
   the in-progress day) and a **real 0** on days it covers but saw nothing. Never
   fill the nulls. `mac_minutes` follows the same rule (below).
+- **`coding_minutes` / `coding_human_minutes` / `coding_ai_minutes`** — editor
+  time from TakaTime, computed by the `duration.mjs` that ships inside its export
+  (`TAKATIME_EXPORT_DIR`), bucketed into local days. It measures hands on the
+  keyboard in a tracked editor, a deliberate floor under real work: reading,
+  thinking past 15 minutes and anything outside the editor count as zero, so a low
+  day is not a lazy day. **Human and AI overlap and are never added** —
+  `coding_minutes` is the union. Human reads slightly high on agent days (the
+  export lacks the data for TakaTime's echo correction). A snapshot like Spotify:
+  null after the export's last full day. It overlaps `mac_minutes` heavily (both
+  see time in the editor) and is a second objective counterpart to
+  `focused_work` — but it counts comfortable coding, which `focused_work`
+  explicitly excludes, so disagreement is expected.
 - **`music_minutes` / `podcast_minutes`** — Spotify playback per local day, from a
   downloaded privacy export (`SPOTIFY_HISTORY_DIR`). The export is a snapshot, so
   everything after its last play is null until a newer export is downloaded; its

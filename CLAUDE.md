@@ -206,9 +206,12 @@ docs/FINANCE.md       finance setup + operations
   it fresh every run. If `focusctl` isn't on PATH the column is null and the rest
   of the export is unaffected.
 
-  Three more local sources follow the same never-stored rule, one module each in
+  Four more local sources follow the same never-stored rule, one module each in
   [scripts/sources/](scripts/sources/), all optional via `.env.local`:
   **Spotify** (`SPOTIFY_HISTORY_DIR`, a downloaded privacy export — no API),
+  **TakaTime** coding time (`TAKATIME_EXPORT_DIR`, durations from the
+  `duration.mjs` inside its own export — never sum its legacy `duration` field,
+  and never add human and AI time),
   **Calendar + Reminders** (`CALENDAR_EXPORT=1`, macOS only, through
   [scripts/calendar-dump.swift](scripts/calendar-dump.swift) and EventKit), and
   **daylight/sunset**, computed from `push_settings` coordinates. The export reads
@@ -289,8 +292,9 @@ docs/FINANCE.md       finance setup + operations
   the analysis docs record the date it started.
 
 - **`workout_type` and the Sunday reflection (Nov 2026).** `workout_type`
-  (`upper|lower|run|other`) is its own evening page, inserted after the gym page
-  only on a `'yes'`, from `WORKOUT_TYPE_START`; a `'no'` saves it as null (not
+  (`upper|lower|run|other`) is revealed inside the evening gym card on a `'yes'`
+  (like the sick level inside its chip — the user asked for that, not a separate
+  page), from `WORKOUT_TYPE_START`; a `'no'` saves it as null (not
   applicable), so a leftover type never survives a Yes → No flip. `week_best` /
   `week_struggle` are an optional page asked only on Sunday evenings from
   `WEEKLY_REFLECTION_START`, stored on that Sunday's row. Check-ins stay one

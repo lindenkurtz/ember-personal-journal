@@ -36,7 +36,8 @@ const GYM_OPTIONS = [
   { value: 'no', label: 'No' }
 ] as const
 
-// Its own page, but only in the flow on a 'yes', so a rest day never sees it.
+// Revealed under "Yes" on the gym card, the same way the sick level opens inside
+// its chip: a rest day still costs one tap, a gym day two, and it stays one page.
 const WORKOUT_OPTIONS = [
   { value: 'upper', label: 'Upper' },
   { value: 'lower', label: 'Lower' },
@@ -132,7 +133,7 @@ interface DraftEvening {
   week_struggle: string
 }
 
-type Step = 'gym' | 'workout' | 'focused' | 'confounds' | 'social' | 'day_quality' | 'week' | 'note'
+type Step = 'gym' | 'focused' | 'confounds' | 'social' | 'day_quality' | 'week' | 'note'
 
 /** Sunday closes the Mon–Sun week, so it is the one evening that asks about it. */
 function asksWeekly(targetDate: string): boolean {
@@ -173,18 +174,15 @@ export default function Evening() {
   // must not ask (or save) the confound questions — writing explicit `false`
   // flags onto a day from before they were tracked would destroy the
   // null = "untracked" distinction. Same gate for focused_work before 8/15.
-  // The workout page joins the flow only after a 'yes' on the gym page.
-  const gymYes = draft.gym_actual === 'yes'
   const questions = useMemo<Step[]>(() => {
     const q: Step[] = ['gym']
-    if (targetDate >= WORKOUT_TYPE_START && gymYes) q.push('workout')
     if (targetDate >= FOCUSED_WORK_START) q.push('focused')
     if (targetDate >= TRACKING_V2_START) q.push('confounds')
     q.push('social', 'day_quality')
     if (asksWeekly(targetDate)) q.push('week')
     q.push('note')
     return q
-  }, [targetDate, gymYes])
+  }, [targetDate])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -354,24 +352,26 @@ function StepView({
   if (step === 'gym') {
     return (
       <QuestionCard stepKey="gym" question="Did you gym?">
-        <PillGroup
-          ariaLabel="Gym actual"
-          options={GYM_OPTIONS}
-          value={draft.gym_actual}
-          onChange={(v) => setDraft({ ...draft, gym_actual: v })}
-        />
-      </QuestionCard>
-    )
-  }
-  if (step === 'workout') {
-    return (
-      <QuestionCard stepKey="workout" question="What kind of workout?">
-        <PillGroup
-          ariaLabel="Workout type"
-          options={WORKOUT_OPTIONS}
-          value={draft.workout_type}
-          onChange={(v) => setDraft({ ...draft, workout_type: v })}
-        />
+        <div className="morning__subfields">
+          <PillGroup
+            ariaLabel="Gym actual"
+            options={GYM_OPTIONS}
+            value={draft.gym_actual}
+            onChange={(v) => setDraft({ ...draft, gym_actual: v })}
+          />
+          {targetDate >= WORKOUT_TYPE_START && draft.gym_actual === 'yes' && (
+            <div className="morning__subfield">
+              <span className="morning__sublabel">What kind?</span>
+              <PillGroup
+                ariaLabel="Workout type"
+                variant="compact"
+                options={WORKOUT_OPTIONS}
+                value={draft.workout_type}
+                onChange={(v) => setDraft({ ...draft, workout_type: v })}
+              />
+            </div>
+          )}
+        </div>
       </QuestionCard>
     )
   }
@@ -527,9 +527,12 @@ function StepView({
 function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
   switch (step) {
     case 'gym':
-      return d.gym_actual !== null
-    case 'workout':
-      return d.workout_type !== null
+      // The one gate is the revealed type, same as the sick level: a 'yes' with
+      // nothing picked would save a gym day with no type.
+      if (d.gym_actual === null) return false
+      return targetDate >= WORKOUT_TYPE_START && d.gym_actual === 'yes'
+        ? d.workout_type !== null
+        : true
     case 'focused':
       return d.focused_work !== null
     case 'confounds':

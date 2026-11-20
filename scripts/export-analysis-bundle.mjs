@@ -19,6 +19,8 @@
  *      changes — see the focusd section below.
  *   4. Optional, also in .env.local — each one adds columns and is null without it:
  *        SPOTIFY_HISTORY_DIR=/path/to/unzipped/spotify/export   (scripts/sources/spotify.mjs)
+ *        TAKATIME_EXPORT_DIR=/path/to/takatime/exports            (scripts/sources/takatime.mjs)
+ *      Paths with spaces are fine quoted: KEY='/Users/me/My Folder'.
  *        CALENDAR_EXPORT=1    macOS: Calendar + Reminders via EventKit
  *                             (scripts/sources/calendar.mjs, analysis/LABELING.md)
  *      Daylight columns need no setup: they're computed from the coordinates
@@ -42,6 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { buildDaylight } from './sources/daylight.mjs';
 import { buildSpotify } from './sources/spotify.mjs';
 import { buildCalendar } from './sources/calendar.mjs';
+import { buildTakatime } from './sources/takatime.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -226,7 +229,7 @@ const CALENDAR_COLS = [
 // Every cleaning rule below is documented in CONTEXT.md. If you change one here,
 // change it there too — otherwise each analysis run silently diverges.
 
-const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, daylight, spotify, calendar }) => {
+const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, coding, daylight, spotify, calendar }) => {
   const nutByDate = new Map((nutrition ?? []).map((r) => [r.date, r]));
   const wtByDate = new Map((weight ?? []).map((r) => [r.date, r]));
   const scrByDate = new Map((screen ?? []).map((r) => [r.date, r]));
@@ -327,6 +330,10 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, dayligh
       phone_pickups: s.phone_pickups ?? null,
       ipad_minutes: s.ipad_minutes ?? null,
       mac_minutes: mac?.get(d) ?? null,
+      // Human and AI overlap and are never added; coding_minutes is their union.
+      coding_minutes: coding?.get(d)?.coding_minutes ?? null,
+      coding_human_minutes: coding?.get(d)?.coding_human_minutes ?? null,
+      coding_ai_minutes: coding?.get(d)?.coding_ai_minutes ?? null,
 
       // Each external source is null on days it doesn't cover and a real 0 on
       // days it covers but saw nothing — see each module's header.
@@ -484,6 +491,7 @@ const main = async () => {
     screen: pulled.screen_time,
     contexts: pulled.context_periods,
     mac: fetchMacMinutes(),
+    coding: await buildTakatime(process.env.TAKATIME_EXPORT_DIR, timezone),
     daylight: settings ? buildDaylight(allDates, { ...settings, timezone }) : null,
     spotify: buildSpotify(process.env.SPOTIFY_HISTORY_DIR, timezone),
     calendar: buildCalendar({

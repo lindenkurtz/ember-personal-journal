@@ -1,7 +1,7 @@
 # Ember
 
 A small, private daily journal for tracking sleep, gym, focused work, social
-time, meal timing, confounding events, and screen time — plus a net-worth
+time, confounding events, and screen time — plus a net-worth
 tracker at `/finance`. Single-user PWA. Lives behind Cloudflare Access. Built
 with React + Vite, Supabase, and the Claude API.
 

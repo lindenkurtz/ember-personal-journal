@@ -8,8 +8,8 @@ constraints that aren't obvious from reading the code. Setup instructions live i
 
 **Ember** — a single-user PWA. Two features share one shell:
 
-- **Daily journal** — sleep, gym, focused work, social, meal timing, confound
-  flags, weekly-entered screen time. Morning and evening check-in flows, a
+- **Daily journal** — sleep, gym, focused work, social, confound flags,
+  weekly-entered screen time. Morning and evening check-in flows, a
   dashboard, a history view, and a Claude-written patterns analysis.
 - **Net-worth tracker** at `/finance` — daily Plaid balance sync, loan
   balances, and a net-worth snapshot charted over time.
@@ -149,10 +149,8 @@ docs/FINANCE.md       finance setup + operations
   The Worker's `dueMorning`/`dueEvening` "done" rules must track
   `isMorningDone`/`isEveningDone` in
   [src/pages/Dashboard.tsx](src/pages/Dashboard.tsx) — if you change one, change
-  the other. They are currently *not* identical: the Dashboard also requires
-  `wake_time` and `gym_intention` for morning, so a partially-filled morning can
-  show as pending on the dashboard while the Worker suppresses the reminder.
-  Evening (`gym_actual` + `day_quality`) does match.
+  the other. They are identical today: morning is `bedtime` + `wake_time` +
+  `sleep_quality`, evening is `gym_actual` + `day_quality`.
 
 - **Finance is net-worth-only.** Transaction ingest, classification, screenshot
   import, the review queue, user rules, the monthly cash-flow / category panels
@@ -258,6 +256,19 @@ docs/FINANCE.md       finance setup + operations
   the only duration evidence, so don't describe any sleep number as objective or
   watch-measured. If a reliable source ever appears, it lands as a new field with
   its own `*_START` constant, not by reviving this one.
+
+- **Morning gym intention and last meal time are retired (Nov 2026); their data
+  is permanent.** Cut to shorten the check-ins. `gym_intention` and
+  `last_meal_start_time` keep every row and stay in History, the prompt rows and
+  the export (with retirement notes in the legend), but no flow asks or writes
+  them. Evening's gym step still seeds from `gym_intention` for make-ups of
+  older days. Same rule as the `deep_work_*` columns.
+
+- **Morning pre-fills `bedtime`/`wake_time` with the 14-day median** when today's
+  row has none (`medianClockTime` in [src/lib/date.ts](src/lib/date.ts), bedtime
+  wrapping at noon like the export). It is a starting value, not a write — the
+  user still confirms with Next — but it can pull answers toward the median, so
+  the analysis docs record the date it started.
 
 - **Nullable means untracked, not "no."** The six confound flags (`sick`,
   `alcohol`, `slept_away`, `travel_day`, `caffeine_late`, `deadline_pressure`)

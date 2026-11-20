@@ -144,6 +144,8 @@ series.
 |---|---|---|
 | _field_ | _YYYY-MM_ | _units, level definitions, null semantics_ |
 | _field replacing a coarser one_ | _YYYY-MM-DD_ | _what the old column now means, and that its earlier rows are undifferentiated_ |
+| _retired field_ | _YYYY-MM-DD → retired YYYY-MM-DD_ | _no longer asked; nulls after the last tracked day are untracked, not missing_ |
+| _field whose input changed_ | _YYYY-MM-DD_ | _e.g. a pre-filled default appeared; say which way it could bias the values (clustering at the default, lower variance)_ |
 
 Also record definitions that aren't obvious from the field name — where the
 boundary sits on an ordinal scale, what exactly counts as a `travel_day`, whether

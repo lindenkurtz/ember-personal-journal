@@ -14,7 +14,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Local {date, hour} for an epoch ms in `timeZone`. */
-const localParts = (ms, timeZone) => {
+export const localParts = (ms, timeZone) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -27,7 +27,7 @@ const localParts = (ms, timeZone) => {
   return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) };
 };
 
-const nextDayKey = (k) => {
+export const nextDayKey = (k) => {
   const d = new Date(`${k}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);

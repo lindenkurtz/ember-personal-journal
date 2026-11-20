@@ -87,6 +87,14 @@ the other**, or successive runs quietly stop being comparable.
   downloaded privacy export (`SPOTIFY_HISTORY_DIR`). The export is a snapshot, so
   everything after its last play is null until a newer export is downloaded; its
   final, cut-off day is dropped.
+  After the snapshot ends, **Last.fm scrobbles** (`LASTFM_USER` + `LASTFM_API_KEY`)
+  carry the music columns on; `music_source` says which one a day came from
+  (`spotify`, `lastfm`, or null). The two are not the same instrument: Last.fm has
+  no play length, so its minutes are scrobbles × full track length — a little high
+  on skip-heavy days — and it never sees podcasts, so `podcast_minutes` is null on
+  `lastfm` days. Compare levels across the switch with care. Last.fm coverage
+  starts on the first scrobble's day; the gap between the Spotify snapshot's end
+  and that day is null on both.
 - **`night_music_minutes`** — music started between 22:00 and 04:00, keyed like the
   sleep fields: to the morning that night ends on, so it sits on the same row as
   the `bedtime` it might have pushed back.

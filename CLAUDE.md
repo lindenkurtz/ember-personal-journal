@@ -206,9 +206,12 @@ docs/FINANCE.md       finance setup + operations
   it fresh every run. If `focusctl` isn't on PATH the column is null and the rest
   of the export is unaffected.
 
-  Four more local sources follow the same never-stored rule, one module each in
+  Five more sources follow the same never-stored rule, one module each in
   [scripts/sources/](scripts/sources/), all optional via `.env.local`:
   **Spotify** (`SPOTIFY_HISTORY_DIR`, a downloaded privacy export — no API),
+  **Last.fm** (`LASTFM_USER` + `LASTFM_API_KEY`, read live at export time; it
+  fills the music columns only on days the Spotify snapshot doesn't cover, tagged
+  by `music_source`, since its minutes are estimates),
   **TakaTime** coding time (`TAKATIME_EXPORT_DIR`, durations from the
   `duration.mjs` inside its own export — never sum its legacy `duration` field,
   and never add human and AI time),

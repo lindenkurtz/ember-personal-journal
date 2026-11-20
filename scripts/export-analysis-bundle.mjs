@@ -251,9 +251,11 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
       sleep_dur_hours: sleepDur === null ? null : Number(sleepDur.toFixed(2)),
       bedtime_hours: bedShift === null ? null : Number((bedShift / 60).toFixed(2)), // 24 = midnight
       wake_hours: wakeMin === null ? null : Number((wakeMin / 60).toFixed(2)),
+      // Retired Nov 2026: no longer asked, so null after the last tracked day.
       last_meal_start_time: e.last_meal_start_time ?? null,
 
       gym: e.gym_actual === 'yes' ? 1 : e.gym_actual === 'no' ? 0 : null,
+      // Retired Nov 2026 with the morning gym question; null after its last day.
       gym_intention: e.gym_intention === 'yes' ? 1 : e.gym_intention === 'no' ? 0 : null,
       // social_level (0-3) replaces the boolean from 2026-09-06. `social` stays the
       // backward-compatible binary so the pre- and post-cutover series remain one

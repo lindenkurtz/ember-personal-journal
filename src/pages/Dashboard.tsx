@@ -156,14 +156,14 @@ export default function Dashboard() {
             )}
             <CheckInCard
               title="Morning check-in"
-              summary={morningDone ? morningSummary(today!) : 'Bedtime, sleep, gym.'}
+              summary={morningDone ? morningSummary(today!) : 'Bedtime, wake, sleep.'}
               status={morningDone ? 'done' : 'pending'}
               variant={morningDone ? 'default' : 'cta'}
               to="/morning"
             />
             <CheckInCard
               title="Evening check-in"
-              summary={eveningDone ? eveningSummary(today!) : 'Gym, meal time, social, how the day went.'}
+              summary={eveningDone ? eveningSummary(today!) : 'Gym, focus, social, how the day went.'}
               status={eveningDone ? 'done' : 'pending'}
               variant={eveningDone ? 'default' : 'cta'}
               to="/evening"
@@ -243,9 +243,9 @@ export default function Dashboard() {
 }
 
 // Kept in lockstep with the worker's dueMorning/dueEvening smart-skips
-// (worker/src/index.ts) — deep_work fields retired July 2026.
+// (worker/src/index.ts) — deep_work fields retired July 2026, gym_intention Nov 2026.
 function isMorningDone(e: Entry | null): boolean {
-  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null && e.gym_intention !== null
+  return !!e && !!e.bedtime && !!e.wake_time && e.sleep_quality !== null
 }
 
 function isEveningDone(e: Entry | null): boolean {
@@ -254,8 +254,8 @@ function isEveningDone(e: Entry | null): boolean {
 
 function morningSummary(e: Entry): string {
   const parts: string[] = []
+  if (e.bedtime && e.wake_time) parts.push(`${e.bedtime.slice(0, 5)} → ${e.wake_time.slice(0, 5)}`)
   if (e.sleep_quality) parts.push(`${'★'.repeat(e.sleep_quality)} sleep`)
-  if (e.gym_intention) parts.push(`gym ${e.gym_intention}`)
   return parts.join(' · ')
 }
 

@@ -35,6 +35,7 @@ interface Settings {
 interface Entry {
   date: string
   bedtime: string | null
+  wake_time: string | null
   sleep_quality: number | null
   gym_actual: string | null
   day_quality: number | null
@@ -165,8 +166,9 @@ async function tick(env: Env, force?: Slot | null): Promise<void> {
 function dueMorning(s: Settings, hhmm: string, dateKey: string, e: Entry | null): boolean {
   if (s.last_morning_sent === dateKey) return false
   if (hhmm < s.morning_time) return false
-  // Morning check-in is "done" when bedtime and sleep quality are present.
-  return !(e && e.bedtime && e.sleep_quality !== null)
+  // Morning check-in is "done" when bedtime, wake time and sleep quality are
+  // present. Kept in lockstep with isMorningDone in the SPA.
+  return !(e && e.bedtime && e.wake_time && e.sleep_quality !== null)
 }
 
 function dueEvening(s: Settings, hhmm: string, dateKey: string, e: Entry | null): boolean {
@@ -218,7 +220,7 @@ async function dueWeekly(
 async function getEntry(supabase: SupabaseClient, date: string): Promise<Entry | null> {
   const { data, error } = await supabase
     .from('entries')
-    .select('date, bedtime, sleep_quality, gym_actual, day_quality, weather_temp_f')
+    .select('date, bedtime, wake_time, sleep_quality, gym_actual, day_quality, weather_temp_f')
     .eq('date', date)
     .maybeSingle()
   if (error) throw error

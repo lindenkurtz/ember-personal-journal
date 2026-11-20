@@ -54,3 +54,24 @@ export function screenTimeWeekStart(today: Date = new Date()): string {
 export function sundayWeekStartKey(dateKey: string): string {
   return dayKey(startOfWeek(parseISO(dateKey), { weekStartsOn: 0 }))
 }
+
+/**
+ * Median of 'HH:MM' clock times, returned as 'HH:MM'. Times earlier than
+ * `wrapBeforeHour` count as the next day, so a bedtime median over 23:30 and
+ * 00:30 lands near midnight instead of at noon. Null when `times` is empty.
+ */
+export function medianClockTime(times: string[], wrapBeforeHour = 0): string | null {
+  const mins = times
+    .map((t) => {
+      const [h, m] = t.split(':').map(Number)
+      const v = h * 60 + m
+      return h < wrapBeforeHour ? v + 24 * 60 : v
+    })
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b)
+  if (mins.length === 0) return null
+  const mid = Math.floor(mins.length / 2)
+  const med = mins.length % 2 ? mins[mid] : Math.round((mins[mid - 1] + mins[mid]) / 2)
+  const wrapped = med % (24 * 60)
+  return `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`
+}

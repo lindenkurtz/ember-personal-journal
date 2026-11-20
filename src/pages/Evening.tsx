@@ -7,7 +7,6 @@ import ProgressDots from '../components/ProgressDots'
 import PillGroup from '../components/PillGroup'
 import NoteInput from '../components/NoteInput'
 import StarRating from '../components/StarRating'
-import TimeInput from '../components/TimeInput'
 import ToggleChipGroup, { ToggleChipOption } from '../components/ToggleChipGroup'
 import {
   getEntry,
@@ -111,7 +110,6 @@ const CONFOUND_OPTIONS: readonly ToggleChipOption<ConfoundKey>[] = [
 interface DraftEvening {
   gym_actual: GymChoice | null
   focused_work: FocusedWork | null
-  last_meal_start_time: string | null
   confounds: Record<ConfoundKey, boolean>
   sick_level: SickLevel | null
   social: boolean | null
@@ -120,7 +118,7 @@ interface DraftEvening {
   note: string
 }
 
-type Step = 'gym' | 'focused' | 'meal' | 'confounds' | 'social' | 'day_quality' | 'note'
+type Step = 'gym' | 'focused' | 'confounds' | 'social' | 'day_quality' | 'note'
 
 const NO_CONFOUNDS = Object.fromEntries(
   CONFOUND_KEYS.map((k) => [k, false])
@@ -139,13 +137,13 @@ export default function Evening() {
   const isMakeup = targetDate !== todayKey()
 
   // Steps are keyed to the TARGET date, not today: a make-up for a pre-v2 day
-  // must not ask (or save) the meal/confound questions — writing explicit
-  // `false` flags onto a day from before they were tracked would destroy the
+  // must not ask (or save) the confound questions — writing explicit `false`
+  // flags onto a day from before they were tracked would destroy the
   // null = "untracked" distinction. Same gate for focused_work before 8/15.
   const questions = useMemo<Step[]>(() => {
     const q: Step[] = ['gym']
     if (targetDate >= FOCUSED_WORK_START) q.push('focused')
-    if (targetDate >= TRACKING_V2_START) q.push('meal', 'confounds')
+    if (targetDate >= TRACKING_V2_START) q.push('confounds')
     q.push('social', 'day_quality', 'note')
     return q
   }, [targetDate])
@@ -154,7 +152,6 @@ export default function Evening() {
   const [draft, setDraft] = useState<DraftEvening>({
     gym_actual: null,
     focused_work: null,
-    last_meal_start_time: null,
     confounds: { ...NO_CONFOUNDS },
     sick_level: null,
     social: null,
@@ -183,9 +180,10 @@ export default function Evening() {
         // not sick and silently clear it on the next save.
         if (e.sick_level != null) confounds.sick = e.sick_level > 0
         setDraft((d) => ({
+          // gym_intention is no longer asked; it only seeds make-ups for days
+          // from before the morning question was cut.
           gym_actual: e.gym_actual ?? e.gym_intention ?? d.gym_actual,
           focused_work: e.focused_work ?? d.focused_work,
-          last_meal_start_time: e.last_meal_start_time ?? d.last_meal_start_time,
           confounds,
           // Never derived from the boolean, for the same reason as social_level.
           sick_level: e.sick_level ?? d.sick_level,
@@ -237,7 +235,6 @@ export default function Evening() {
         patch.social = draft.social
       }
       if (targetDate >= TRACKING_V2_START) {
-        patch.last_meal_start_time = draft.last_meal_start_time
         // Explicit true/false for every flag: tapping past the screen means
         // "tracked, nothing unusual", which the analysis must be able to tell
         // apart from the pre-v2 nulls.
@@ -319,11 +316,7 @@ function StepView({
 }) {
   if (step === 'gym') {
     return (
-      <QuestionCard
-        stepKey="gym"
-        question="Did you gym?"
-        hint="Confirm or update your morning answer."
-      >
+      <QuestionCard stepKey="gym" question="Did you gym?">
         <PillGroup
           ariaLabel="Gym actual"
           options={GYM_OPTIONS}
@@ -345,21 +338,6 @@ function StepView({
           options={FOCUSED_OPTIONS}
           value={draft.focused_work}
           onChange={(v) => setDraft({ ...draft, focused_work: v })}
-        />
-      </QuestionCard>
-    )
-  }
-  if (step === 'meal') {
-    return (
-      <QuestionCard
-        stepKey="meal"
-        question="When did you start your last meal?"
-        hint="The time you started eating — not when you finished."
-      >
-        <TimeInput
-          ariaLabel="Last meal start time"
-          value={draft.last_meal_start_time}
-          onChange={(v) => setDraft({ ...draft, last_meal_start_time: v })}
         />
       </QuestionCard>
     )
@@ -473,8 +451,6 @@ function isValid(step: Step, d: DraftEvening, targetDate: string): boolean {
       return d.gym_actual !== null
     case 'focused':
       return d.focused_work !== null
-    case 'meal':
-      return !!d.last_meal_start_time
     case 'confounds':
       // No selection is still a normal day. The one gate is the revealed level: a
       // Sick chip with nothing picked would save as 0 and read back as not sick.

@@ -67,6 +67,50 @@ the other**, or successive runs quietly stop being comparable.
   three-state column that starts at the cutover. The export warns, with dates, on
   any row where the two disagree.
 - **`context`** — resolved from `context_periods` by date.
+- **External sources — one rule for all of them.** Each is null on days the
+  source doesn't cover (not set up, before it started, after its snapshot ends,
+  the in-progress day) and a **real 0** on days it covers but saw nothing. Never
+  fill the nulls. `mac_minutes` follows the same rule (below).
+- **`coding_minutes` / `coding_human_minutes` / `coding_ai_minutes`** — editor
+  time from TakaTime, computed by the `duration.mjs` that ships inside its export
+  (`TAKATIME_EXPORT_DIR`), bucketed into local days. It measures hands on the
+  keyboard in a tracked editor, a deliberate floor under real work: reading,
+  thinking past 15 minutes and anything outside the editor count as zero, so a low
+  day is not a lazy day. **Human and AI overlap and are never added** —
+  `coding_minutes` is the union. Human reads slightly high on agent days (the
+  export lacks the data for TakaTime's echo correction). A snapshot like Spotify:
+  null after the export's last full day. It overlaps `mac_minutes` heavily (both
+  see time in the editor) and is a second objective counterpart to
+  `focused_work` — but it counts comfortable coding, which `focused_work`
+  explicitly excludes, so disagreement is expected.
+- **`music_minutes` / `podcast_minutes`** — Spotify playback per local day, from a
+  downloaded privacy export (`SPOTIFY_HISTORY_DIR`). The export is a snapshot, so
+  everything after its last play is null until a newer export is downloaded; its
+  final, cut-off day is dropped.
+- **`night_music_minutes`** — music started between 22:00 and 04:00, keyed like the
+  sleep fields: to the morning that night ends on, so it sits on the same row as
+  the `bedtime` it might have pushed back.
+- **`cal_*_h`** — scheduled hours per category from Calendar (`CALENDAR_EXPORT=1`),
+  for `class`, `study`, `work`, `social`, `exercise`; `cal_other_h` lumps
+  appointment, admin, exam, deadline and other. Categories come from a
+  hand-maintained label file filled in by Claude Code (`analysis/LABELING.md`),
+  not from the event text at analysis time. `cal_unlabeled_h` is time no label
+  covered yet — a high value means the labels are behind, not that the day was
+  unusual. All-day events add no hours. Scheduled time is not attended time.
+- **`cal_busy_h`** — hours with at least one timed event, overlaps counted once.
+  `cal_events` counts timed events. `cal_first_start_hours` /
+  `cal_last_end_hours` are the day's first start and last end on the 0–24 clock,
+  null on a day with nothing timed.
+- **`cal_deadline_48h`** — 1 when an event labeled exam or deadline falls today or
+  in the next two days. The calendar-derived counterpart to the self-reported
+  `deadline_pressure` flag: report agreement and disagreement, neither is ground
+  truth.
+- **`reminders_done`** — Reminders completed that local day. A count, not a
+  measure of effort.
+- **`daylight_hours` / `sunset_hours`** — computed from the location in the app's
+  settings (the coordinates never enter the bundle). Deterministic and complete;
+  they move with the season, so they share a trend with anything seasonal —
+  detrend before reading them.
 
 ## Cleaning rules already applied
 

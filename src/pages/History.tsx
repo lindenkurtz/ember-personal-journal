@@ -148,7 +148,10 @@ function DayDetail({
       {(e.gym_intention || e.gym_actual) && (
         <DetailRow
           label="Gym"
-          value={e.gym_intention ? `${e.gym_intention} → ${e.gym_actual ?? '—'}` : e.gym_actual!}
+          value={
+            (e.gym_intention ? `${e.gym_intention} → ${e.gym_actual ?? '—'}` : e.gym_actual!) +
+            (e.workout_type ? ` · ${e.workout_type}` : '')
+          }
         />
       )}
       {e.focused_work != null && <DetailRow label="Focused work" value={e.focused_work} />}
@@ -200,6 +203,8 @@ function DayDetail({
       )}
       {e.weather_temp_f != null && <DetailRow label="Weather" value={`${e.weather_temp_f}°F`} />}
       {e.note && <DetailRow label="Note" value={e.note} />}
+      {e.week_best && <DetailRow label="Week — best" value={e.week_best} />}
+      {e.week_struggle && <DetailRow label="Week — struggle" value={e.week_struggle} />}
     </div>
   )
 }

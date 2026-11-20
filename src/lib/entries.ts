@@ -3,6 +3,10 @@ import { todayKey, lastNDays } from './date'
 
 export type GymChoice = 'yes' | 'no'
 
+/** Asked only on gym days. Deliberately coarse: one tap, and the boundaries are
+ * obvious enough to score the same way every time. */
+export type WorkoutType = 'upper' | 'lower' | 'run' | 'other'
+
 /** Ordinal, ordered by hours: none / <1h / 1–3h / 3–5h / 5h+. `heavy` was added
  * 2026-09-06 to split an open-ended `deep` (then 3h+); on rows before that date
  * `deep` means "≥3h" and is not resolved any finer. Cut points at 1h and 3h are
@@ -61,6 +65,13 @@ export const SOCIAL_LEVEL_START = '2026-09-06'
  * resolution, and a make-up entry must not invent a level for one. */
 export const SICK_LEVEL_START = '2026-09-06'
 
+/** First date the evening gym step asks the workout type on a 'yes'. Earlier gym
+ * days stay null = untracked; a make-up must not invent a type for them. */
+export const WORKOUT_TYPE_START = '2026-11-21'
+
+/** First Sunday-or-later date the evening flow asks the weekly reflection. */
+export const WEEKLY_REFLECTION_START = '2026-11-21'
+
 /** Shape of a single daily entry. One row per date. */
 export interface Entry {
   date: string // YYYY-MM-DD, primary key
@@ -74,6 +85,7 @@ export interface Entry {
   day_quality: number | null // 1–5, evening self-report of the day overall
   gym_intention: GymChoice | null
   gym_actual: GymChoice | null
+  workout_type: WorkoutType | null // only on gym days, asked from WORKOUT_TYPE_START
   deep_work_target: number | null // hours (legacy, no longer written)
   deep_work_actual: number | null // hours (legacy, no longer written — retired July 2026)
   deep_work_start: string | null // 'HH:MM' (legacy, no longer written)
@@ -91,6 +103,8 @@ export interface Entry {
   social: boolean | null // legacy binary; still written from SOCIAL_LEVEL_START as (social_level > 0) so the series stays continuous
   social_level: SocialLevel | null // 0 none / 1 passing / 2 a real hang / 3 most of the day, asked from SOCIAL_LEVEL_START
   note: string | null
+  week_best: string | null // Sunday rows only, from WEEKLY_REFLECTION_START
+  week_struggle: string | null // Sunday rows only, from WEEKLY_REFLECTION_START
   hrv_avg: number | null
   resting_hr: number | null
   steps: number | null

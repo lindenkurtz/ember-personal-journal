@@ -36,6 +36,7 @@ export function buildCompactRows(
       dq: e.day_quality,
       gym_i: e.gym_intention,
       gym_a: e.gym_actual,
+      wo: e.workout_type,
       dw_p: e.deep_work_planned,
       dw_a: e.deep_work_actual,
       fw: e.focused_work,
@@ -58,7 +59,11 @@ export function buildCompactRows(
       row.st_pu = st.phone_pickups
       row.st_ip = st.ipad_minutes
     }
-    if (opts.notes) row.note = e.note
+    if (opts.notes) {
+      row.note = e.note
+      if (e.week_best) row.wk_best = e.week_best
+      if (e.week_struggle) row.wk_hard = e.week_struggle
+    }
     return row
   })
 }
@@ -69,6 +74,7 @@ export const FIELD_LEGEND = [
   '  sleep = self-reported sleep quality 1–5 (subjective), describing the night ending that morning. There is no objective sleep measurement — bed/wake are the only duration evidence, and they are self-reported too.',
   '  dq = self-reported day quality 1–5 (PRIMARY TARGET — find what predicts this).',
   "  gym_a = whether the user went to the gym ('yes'|'no'). gym_i = the morning's stated intention — RETIRED Nov 2026; values exist only on older dates, so absence is untracked, not a missed plan.",
+  "  wo = workout type on gym days: 'upper' | 'lower' | 'run' | 'other'. Asked from 2026-11-21, only when gym_a = 'yes' — null on a 'no' day is not applicable, null on an earlier gym day is untracked.",
   '  dw_p / dw_a = deep-work intention / actual hours — tracking RETIRED mid-July 2026 and replaced by fw; values exist only on older dates.',
   "  fw = focused work: 'none' | 'light' (<1h) | 'solid' (1–3h) | 'deep' (3–5h) | 'heavy' (5h+). Self-directed work hard enough it could not be done on autopilot — not lecture, email, or comfortable execution. Asked from 2026-08-15.",
   "    'heavy' was added 2026-09-06 to split a then-open-ended top bucket. On rows before that date 'deep' means only '≥3h' and is not resolved further — never read a pre-cutover 'deep' as 3–5h, and never read 'heavy' appearing only in September as a change in behavior.",
@@ -83,7 +89,8 @@ export const FIELD_LEGEND = [
   "  soc_lv = social level: 0 = none | 1 = passing (roommates around, someone in class) | 2 = a real hang | 3 = most of the day. Asked from 2026-09-06; null before that, and never backfilled — earlier days were only ever rated as the boolean, so absence is untracked, not 0.",
   '  hrv = avg heart-rate variability (ms), rhr = resting heart rate (bpm), steps = daily steps.',
   '  tempF = outside °F at morning check-in, wcode = Open-Meteo WMO weather code.',
-  '  note = freetext note about the day (when present).'
+  '  note = freetext note about the day (when present).',
+  '  wk_best / wk_hard = optional Sunday-evening reflection on the Mon–Sun week that day closes: what was enjoyed most / the biggest struggle. Sunday rows only, from 2026-11-21.'
 ].join('\n')
 
 export const SPARSE_NOTE =

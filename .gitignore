@@ -28,6 +28,8 @@ analysis-bundles/
 analysis/*
 !analysis/ANALYZE.md
 !analysis/*.template.md
+# Method only — the label data it describes lives in analysis/labels/, ignored.
+!analysis/LABELING.md
 
 # Scratch notes. plan.md previously held a family member's name and finance
 # details; assume anything in this shape is personal.

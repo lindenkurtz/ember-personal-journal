@@ -123,8 +123,8 @@
   margin: 0;
 }
 
-/* Stacked sub-fields inside one question card — the gym step's workout type and
- * the Sunday reflection's two prompts. */
+/* Stacked sub-fields inside one question card — the Sunday reflection's two
+ * prompts. */
 .morning__subfields {
   display: flex;
   flex-direction: column;

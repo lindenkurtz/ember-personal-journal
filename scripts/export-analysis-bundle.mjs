@@ -17,6 +17,12 @@
  *   3. Optional: install focusd so `focusctl` is on PATH, and Mac screen time is
  *      merged in as `mac_minutes`. Without it that column is null and nothing else
  *      changes — see the focusd section below.
+ *   4. Optional, also in .env.local — each one adds columns and is null without it:
+ *        SPOTIFY_HISTORY_DIR=/path/to/unzipped/spotify/export   (scripts/sources/spotify.mjs)
+ *        CALENDAR_EXPORT=1    macOS: Calendar + Reminders via EventKit
+ *                             (scripts/sources/calendar.mjs, analysis/LABELING.md)
+ *      Daylight columns need no setup: they're computed from the coordinates
+ *      already in push_settings, which never enter the bundle themselves.
  *
  * Run:
  *   node scripts/export-analysis-bundle.mjs
@@ -33,6 +39,9 @@ import { writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDaylight } from './sources/daylight.mjs';
+import { buildSpotify } from './sources/spotify.mjs';
+import { buildCalendar } from './sources/calendar.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -195,11 +204,29 @@ const fetchMacMinutes = () => {
 };
 
 // --- derived daily table ----------------------------------------------------
+
+// Listed so the columns exist (as null) even when calendar export is off, and so
+// the merged CSV's column order doesn't depend on which sources ran.
+const CALENDAR_COLS = [
+  'cal_class_h',
+  'cal_study_h',
+  'cal_work_h',
+  'cal_social_h',
+  'cal_exercise_h',
+  'cal_other_h',
+  'cal_unlabeled_h',
+  'cal_busy_h',
+  'cal_events',
+  'cal_first_start_hours',
+  'cal_last_end_hours',
+  'cal_deadline_48h',
+  'reminders_done',
+];
 //
 // Every cleaning rule below is documented in CONTEXT.md. If you change one here,
 // change it there too — otherwise each analysis run silently diverges.
 
-const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
+const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, daylight, spotify, calendar }) => {
   const nutByDate = new Map((nutrition ?? []).map((r) => [r.date, r]));
   const wtByDate = new Map((weight ?? []).map((r) => [r.date, r]));
   const scrByDate = new Map((screen ?? []).map((r) => [r.date, r]));
@@ -301,6 +328,16 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
       ipad_minutes: s.ipad_minutes ?? null,
       mac_minutes: mac?.get(d) ?? null,
 
+      // Each external source is null on days it doesn't cover and a real 0 on
+      // days it covers but saw nothing — see each module's header.
+      music_minutes: spotify?.get(d)?.music_minutes ?? null,
+      podcast_minutes: spotify?.get(d)?.podcast_minutes ?? null,
+      night_music_minutes: spotify?.get(d)?.night_music_minutes ?? null,
+      ...CALENDAR_COLS.reduce((acc, c) => ({ ...acc, [c]: calendar?.get(d)?.[c] ?? null }), {}),
+
+      daylight_hours: daylight?.get(d)?.daylight_hours ?? null,
+      sunset_hours: daylight?.get(d)?.sunset_hours ?? null,
+
       hrv_avg: e.hrv_avg ?? null,
       resting_hr: e.resting_hr ?? null,
       steps: e.steps ?? null,
@@ -374,15 +411,30 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac }) => {
 
 // --- coverage report --------------------------------------------------------
 
+const present = (v) => v !== null && v !== undefined && v !== '';
+
 const coverage = (rows) => {
   const cols = Object.keys(rows[0] ?? {});
   return cols
     .map((c) => {
-      const n = rows.filter((r) => r[c] !== null && r[c] !== undefined && r[c] !== '').length;
-      return { column: c, n, pct: rows.length ? Math.round((n / rows.length) * 100) : 0 };
+      const hits = rows.filter((r) => present(r[c]));
+      return {
+        column: c,
+        n: hits.length,
+        pct: rows.length ? Math.round((hits.length / rows.length) * 100) : 0,
+        last: hits.at(-1)?.date ?? null,
+      };
     })
     .sort((a, b) => a.pct - b.pct);
 };
+
+// A row exists for every calendar day whether or not anything was logged — the
+// Worker's weather snapshot creates it — so row count says nothing about logging.
+// A day counts as logged when its check-in was actually done.
+const isLogged = (r) => present(r.day_quality) || present(r.sleep_quality);
+
+/** Gap in whole days between two YYYY-MM-DD keys. */
+const dayGap = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 
 // --- main -------------------------------------------------------------------
 
@@ -414,6 +466,17 @@ const main = async () => {
     process.exit(1);
   }
 
+  // Read, not dumped: push_* stays out of the bundle. Only the timezone (to bucket
+  // Spotify plays into local days) and the coordinates (for daylight) are used,
+  // and neither is written anywhere.
+  const { data: settings } = await sb
+    .from('push_settings')
+    .select('latitude, longitude, timezone')
+    .limit(1)
+    .maybeSingle();
+  const timezone = settings?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const allDates = byDate(pulled.entries).map((e) => e.date);
+
   const daily = buildDaily({
     entries: pulled.entries,
     nutrition: pulled.daily_nutrition,
@@ -421,6 +484,13 @@ const main = async () => {
     screen: pulled.screen_time,
     contexts: pulled.context_periods,
     mac: fetchMacMinutes(),
+    daylight: settings ? buildDaylight(allDates, { ...settings, timezone }) : null,
+    spotify: buildSpotify(process.env.SPOTIFY_HISTORY_DIR, timezone),
+    calendar: buildCalendar({
+      root: ROOT,
+      dates: allDates,
+      enabled: process.env.CALENDAR_EXPORT === '1',
+    }),
   });
   writeFileSync(join(outDir, 'daily_merged.csv'), toCsv(daily));
   console.log(`\n  daily_merged.csv     ${daily.length} rows (cleaned + derived)`);
@@ -437,17 +507,46 @@ const main = async () => {
   const spanDays =
     (new Date(dates.at(-1)) - new Date(dates[0])) / 864e5 + 1;
   const cov = coverage(daily);
+  const logged = daily.filter(isLogged);
+  const unloggedRecent = daily
+    .filter((r) => !isLogged(r) && dayGap(r.date, stamp) <= 30 && r.date !== stamp)
+    .map((r) => r.date);
+  const eveningMissed = daily.filter(
+    (r) => present(r.sleep_quality) && !present(r.day_quality) && r.date !== stamp
+  ).length;
+  // A column that used to have values and hasn't for two weeks has stalled — a
+  // paused import, a broken sync, or a retired question. Worth a line either way.
+  const stalled = cov.filter(
+    // away_night_index is sparse by design — only trips have one.
+    (c) => c.last && c.n >= 5 && c.column !== 'away_night_index' && dayGap(c.last, stamp) > 14
+  );
+  const lastByTable = new Map(
+    Object.entries(pulled)
+      .filter(([, rows]) => rows.some((r) => r.date))
+      .map(([t, rows]) => [t, rows.map((r) => r.date).filter(Boolean).sort().at(-1)])
+  );
 
   const manifest = [
     `# Bundle manifest — generated ${stamp}`,
     ``,
     `Date range: ${dates[0]} → ${dates.at(-1)}`,
-    `Entries: ${daily.length} rows over ${spanDays} calendar days (${
-      spanDays - daily.length
-    } missing days)`,
+    `Rows: ${daily.length} over ${spanDays} calendar days. A row exists for every day ` +
+      `(the weather snapshot creates it), so rows are not logged days.`,
+    `Logged days (a check-in was done): ${logged.length}/${daily.length}. ` +
+      `Morning done but evening missed: ${eveningMissed}.`,
+    unloggedRecent.length
+      ? `Unlogged in the last 30 days (${unloggedRecent.length}): ${unloggedRecent.join(', ')}`
+      : `Every day in the last 30 was logged.`,
     ``,
-    `## Row counts`,
-    ...Object.entries(pulled).map(([t, r]) => `- ${t}: ${r.length}`),
+    `## Row counts and last date`,
+    ...Object.entries(pulled).map(
+      ([t, r]) => `- ${t}: ${r.length}${lastByTable.has(t) ? ` (last ${lastByTable.get(t)})` : ''}`
+    ),
+    ``,
+    `## Stalled columns (had data, nothing in the last 14 days)`,
+    `A trailing gap is not a behavior change. Check CONTEXT.md for whether it was paused or retired.`,
+    ``,
+    ...(stalled.length ? stalled.map((c) => `- ${c.column}: last ${c.last}`) : ['- none']),
     ``,
     `## Contexts`,
     ...(pulled.context_periods ?? []).map(
@@ -457,7 +556,9 @@ const main = async () => {
     `## Column coverage in daily_merged.csv (lowest first)`,
     `Anything under ~70% needs its n reported explicitly in any finding that uses it.`,
     ``,
-    ...cov.map((c) => `- ${c.column}: ${c.n}/${daily.length} (${c.pct}%)`),
+    ...cov.map(
+      (c) => `- ${c.column}: ${c.n}/${daily.length} (${c.pct}%)${c.last ? `, last ${c.last}` : ''}`
+    ),
   ].join('\n');
 
   writeFileSync(join(outDir, 'MANIFEST.md'), manifest);

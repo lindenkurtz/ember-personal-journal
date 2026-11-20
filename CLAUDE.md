@@ -206,6 +206,24 @@ docs/FINANCE.md       finance setup + operations
   it fresh every run. If `focusctl` isn't on PATH the column is null and the rest
   of the export is unaffected.
 
+  Three more local sources follow the same never-stored rule, one module each in
+  [scripts/sources/](scripts/sources/), all optional via `.env.local`:
+  **Spotify** (`SPOTIFY_HISTORY_DIR`, a downloaded privacy export — no API),
+  **Calendar + Reminders** (`CALENDAR_EXPORT=1`, macOS only, through
+  [scripts/calendar-dump.swift](scripts/calendar-dump.swift) and EventKit), and
+  **daylight/sunset**, computed from `push_settings` coordinates. The export reads
+  `push_settings` for coordinates and timezone but never dumps it, and coordinates
+  never enter the bundle. Calendar titles don't either: they are reduced to hours
+  per category using `analysis/labels/calendar_labels.csv` (gitignored), which
+  Claude Code fills in from the `calendar_unlabeled.csv` each export writes —
+  see [analysis/LABELING.md](analysis/LABELING.md). **No Anthropic API call
+  belongs in the export**; labeling is a Claude Code step by design. Each source
+  is null where it didn't look and a real 0 where it looked and saw nothing —
+  the `mac_minutes` rule, and why `calendar-dump.swift` reports access flags.
+
+  The manifest counts **logged days** (a check-in done), not rows: the Worker's
+  weather snapshot creates a row every day, so row count hides skipped days.
+
   Four things to keep true:
   - **`buildDaily`'s cleaning rules and the "Derived fields" / "Cleaning rules"
     sections of CONTEXT.md *and* its template are one spec written three times.**
@@ -269,6 +287,15 @@ docs/FINANCE.md       finance setup + operations
   wrapping at noon like the export). It is a starting value, not a write — the
   user still confirms with Next — but it can pull answers toward the median, so
   the analysis docs record the date it started.
+
+- **`workout_type` and the Sunday reflection (Nov 2026).** `workout_type`
+  (`upper|lower|run|other`) is its own evening page, inserted after the gym page
+  only on a `'yes'`, from `WORKOUT_TYPE_START`; a `'no'` saves it as null (not
+  applicable), so a leftover type never survives a Yes → No flip. `week_best` /
+  `week_struggle` are an optional page asked only on Sunday evenings from
+  `WEEKLY_REFLECTION_START`, stored on that Sunday's row. Check-ins stay one
+  question per page — the user prefers it; a single-page layout was mocked and
+  declined.
 
 - **Nullable means untracked, not "no."** The six confound flags (`sick`,
   `alcohol`, `slept_away`, `travel_day`, `caffeine_late`, `deadline_pressure`)

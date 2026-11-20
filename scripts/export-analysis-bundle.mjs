@@ -20,6 +20,7 @@
  *   4. Optional, also in .env.local — each one adds columns and is null without it:
  *        SPOTIFY_HISTORY_DIR=/path/to/unzipped/spotify/export   (scripts/sources/spotify.mjs)
  *        TAKATIME_EXPORT_DIR=/path/to/takatime/exports            (scripts/sources/takatime.mjs)
+ *        LASTFM_USER=<username>  LASTFM_API_KEY=<read-only key>   (scripts/sources/lastfm.mjs)
  *      Paths with spaces are fine quoted: KEY='/Users/me/My Folder'.
  *        CALENDAR_EXPORT=1    macOS: Calendar + Reminders via EventKit
  *                             (scripts/sources/calendar.mjs, analysis/LABELING.md)
@@ -43,6 +44,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDaylight } from './sources/daylight.mjs';
 import { buildSpotify } from './sources/spotify.mjs';
+import { buildLastfm } from './sources/lastfm.mjs';
 import { buildCalendar } from './sources/calendar.mjs';
 import { buildTakatime } from './sources/takatime.mjs';
 
@@ -229,7 +231,15 @@ const CALENDAR_COLS = [
 // Every cleaning rule below is documented in CONTEXT.md. If you change one here,
 // change it there too — otherwise each analysis run silently diverges.
 
-const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, coding, daylight, spotify, calendar }) => {
+const musicFor = (d, spotify, lastfm) => {
+  const s = spotify?.get(d);
+  if (s) return { ...s, music_source: 'spotify' };
+  const l = lastfm?.get(d);
+  if (l) return { music_minutes: l.music_minutes, podcast_minutes: null, night_music_minutes: l.night_music_minutes, music_source: 'lastfm' };
+  return { music_minutes: null, podcast_minutes: null, night_music_minutes: null, music_source: null };
+};
+
+const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, coding, daylight, spotify, lastfm, calendar }) => {
   const nutByDate = new Map((nutrition ?? []).map((r) => [r.date, r]));
   const wtByDate = new Map((weight ?? []).map((r) => [r.date, r]));
   const scrByDate = new Map((screen ?? []).map((r) => [r.date, r]));
@@ -337,9 +347,9 @@ const buildDaily = ({ entries, nutrition, weight, screen, contexts, mac, coding,
 
       // Each external source is null on days it doesn't cover and a real 0 on
       // days it covers but saw nothing — see each module's header.
-      music_minutes: spotify?.get(d)?.music_minutes ?? null,
-      podcast_minutes: spotify?.get(d)?.podcast_minutes ?? null,
-      night_music_minutes: spotify?.get(d)?.night_music_minutes ?? null,
+      // Spotify's exact play time wins where it covers a day; Last.fm (an estimate,
+      // and blind to podcasts) carries on after the Spotify snapshot ends.
+      ...musicFor(d, spotify, lastfm),
       ...CALENDAR_COLS.reduce((acc, c) => ({ ...acc, [c]: calendar?.get(d)?.[c] ?? null }), {}),
 
       daylight_hours: daylight?.get(d)?.daylight_hours ?? null,
@@ -494,6 +504,7 @@ const main = async () => {
     coding: await buildTakatime(process.env.TAKATIME_EXPORT_DIR, timezone),
     daylight: settings ? buildDaylight(allDates, { ...settings, timezone }) : null,
     spotify: buildSpotify(process.env.SPOTIFY_HISTORY_DIR, timezone),
+    lastfm: await buildLastfm(process.env.LASTFM_USER, process.env.LASTFM_API_KEY, timezone, stamp),
     calendar: buildCalendar({
       root: ROOT,
       dates: allDates,
